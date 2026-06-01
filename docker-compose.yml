@@ -59,6 +59,36 @@ services:
       - modir_net
     ports:
       - "8200:8200"  # exposed so seed script can hit it from host
+    healthcheck:
+      test: ["CMD", "vault", "status", "-address=http://127.0.0.1:8200"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Dev-only: Vault runs in in-memory dev mode, so secrets are wiped on every
+  # recreate. This one-shot service re-seeds them automatically once Vault is up,
+  # then exits. Keeps `docker compose up` self-contained — no manual seed step.
+  vault-seed:
+    image: hashicorp/vault:latest
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root
+      SKIP_SETCAP: "true"   # we override the entrypoint; skip the image's mlock setcap step
+    cap_add:
+      - IPC_LOCK
+    networks:
+      - modir_net
+    depends_on:
+      vault:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - sh
+      - -c
+      - |
+        vault kv put secret/modir/llm gemini_api_key="placeholder-rotate-before-prod" &&
+        vault kv put secret/modir/minio access_key="modir-access" secret_key="modir-secret-changeme" &&
+        vault kv put secret/modir/auth jwt_secret="dev-jwt-secret-rotate-before-prod"
 
   migrate:
     build:
@@ -92,6 +122,8 @@ services:
         condition: service_healthy
       vault:
         condition: service_started
+      vault-seed:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
 
