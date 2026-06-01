@@ -1,12 +1,15 @@
-from datetime import datetime
+from datetime import datetime, time
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Integer,
+    Numeric,
     String,
     Text,
+    Time,
     UniqueConstraint,
     func,
 )
@@ -121,3 +124,94 @@ class AuditLog(Base):
     actor_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     action: Mapped[str] = mapped_column(String(64), nullable=False)
     target: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class BusinessProfile(Base):
+    """The shop's public identity. One row per tenant (tenant_id is the key)."""
+
+    __tablename__ = "business_profile"
+    __table_args__ = (UniqueConstraint("tenant_id", name="uq_profile_tenant"),)
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    business_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    delivery_radius_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    accepts_delivery: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    accepts_pickup: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    logo_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+
+
+class Product(Base):
+    """THE product catalog. Reused by Phase 2 (orders), 4 (inventory),
+    5 (OCR mapping), 6 (ML forecasting). One table — never a per-phase copy."""
+
+    __tablename__ = "products"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    name_ar: Mapped[str] = mapped_column(String(255), nullable=False)
+    name_en: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description_ar: Mapped[str | None] = mapped_column(Text, nullable=True)
+    price_lbp: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    price_usd: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    is_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    image_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+
+
+class OperatingHours(Base):
+    """When the shop is open, per day of week (0=Mon ... 6=Sun)."""
+
+    __tablename__ = "operating_hours"
+    __table_args__ = (UniqueConstraint("tenant_id", "day_of_week", name="uq_hours_tenant_day"),)
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    day_of_week: Mapped[int] = mapped_column(Integer, nullable=False)
+    open_time: Mapped[time | None] = mapped_column(Time, nullable=True)
+    close_time: Mapped[time | None] = mapped_column(Time, nullable=True)
+    is_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Lebanese Arabic exception note, e.g. "مغلق خلال رمضان بعد الإفطار".
+    note_ar: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class BusinessPolicy(Base):
+    """Key/value store for shop rules: min_order_lbp, delivery_fee_lbp, etc."""
+
+    __tablename__ = "business_policies"
+    __table_args__ = (UniqueConstraint("tenant_id", "key", name="uq_policy_tenant_key"),)
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    key: Mapped[str] = mapped_column(String(64), nullable=False)
+    value: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class KnowledgeBaseDoc(Base):
+    """Tracks what is embedded in pgvector and whether it is in sync.
+
+    source_type: "product" | "policy" | "faq" | "operating_hours"
+    embedding_status: "pending" | "embedded" | "stale"
+    Phase 5 processes these; Phase 1 only creates/updates the tracking rows.
+    """
+
+    __tablename__ = "knowledge_base_docs"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "source_type", "source_id", name="uq_kb_tenant_source"),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    embedded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    embedding_status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
