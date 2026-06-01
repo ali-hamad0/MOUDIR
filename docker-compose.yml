@@ -1,0 +1,107 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16   # NOT postgres:16 — pgvector extension needed from Phase 1
+    environment:
+      POSTGRES_USER: modir
+      POSTGRES_PASSWORD: modir
+      POSTGRES_DB: modir
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - modir_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U modir"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    # No ports exposed externally — db is internal only.
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    networks:
+      - modir_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: modir-access
+      MINIO_ROOT_PASSWORD: modir-secret-changeme
+    volumes:
+      - minio_data:/data
+    networks:
+      - modir_net
+    ports:
+      - "9001:9001"  # console only; API stays internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  vault:
+    image: hashicorp/vault:latest
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: root
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - vault_data:/vault/data
+    networks:
+      - modir_net
+    ports:
+      - "8200:8200"  # exposed so seed script can hit it from host
+
+  migrate:
+    build:
+      context: ./backend
+    env_file: .env
+    networks:
+      - modir_net
+    depends_on:
+      db:
+        condition: service_healthy
+      vault:
+        condition: service_started
+    # Runtime image has no `uv` (deps baked into .venv, on PATH) — call alembic directly.
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    build:
+      context: ./backend
+    env_file: .env
+    networks:
+      - modir_net
+    ports:
+      - "8000:8000"
+    volumes:
+      - api_logs:/var/log/modir
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      vault:
+        condition: service_started
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  db_data:
+  redis_data:
+  minio_data:
+  vault_data:
+  api_logs:
+
+networks:
+  modir_net:
+    driver: bridge
