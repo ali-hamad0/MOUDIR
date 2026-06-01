@@ -7,3 +7,6 @@ Code/comments stay English; these strings reach the owner/customer.
 # Wrong email/password, or unknown shop number. Kept deliberately vague so it
 # does not reveal whether the account exists.
 INVALID_CREDENTIALS = "الإيميل أو كلمة السر غلط. جرّب مرة تانية."
+
+# A tenant already registered this WhatsApp number (returned on signup conflict).
+WHATSAPP_ALREADY_REGISTERED = "هالرقم مسجّل من قبل."
