@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.db.session import create_engine
 from app.infra.logging import configure_logging, get_logger
 from app.infra.settings import get_settings
 
@@ -26,14 +27,18 @@ async def lifespan(app: FastAPI):
         log_level=settings.log_level,
     )
 
-    # Future: app.state.db_engine = create_async_engine(...)
+    app.state.db_engine = create_engine()
+    log.info("modir.db.engine.created")
+
     # Future: app.state.demand_model = joblib.load(...)
     # Future: app.state.llm_router = LLMRouter(settings)
 
     yield
 
+    await app.state.db_engine.dispose()
+    log.info("modir.db.engine.disposed")
+
     log.info("modir.shutdown")
-    # Future: await app.state.db_engine.dispose()
 
 
 def create_app() -> FastAPI:
