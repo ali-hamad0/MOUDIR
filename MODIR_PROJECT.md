@@ -1470,12 +1470,12 @@ routing:
     - gemini_flash      # primary — fast, free tier
     - grok_mini         # fallback — when Gemini fails
     - claude_haiku      # emergency — last resort
-  
+
   tier_2_analysis:
     - gemini_flash      # primary with deeper prompts
     - grok              # fallback
     - claude_sonnet     # emergency
-  
+
   tier_3_strategic:
     - gemini_pro        # primary — heavy reasoning
     - grok              # fallback
@@ -1489,7 +1489,7 @@ When a tier 1 query arrives, the router calls Gemini Flash first. If it fails (t
 ```python
 async def complete(tier, messages):
     providers = ROUTING[tier]  # ordered list
-    
+
     for provider in providers:
         try:
             response = await provider.call(
@@ -1498,12 +1498,12 @@ async def complete(tier, messages):
             )
             log_success(provider, tier)
             return response
-            
-        except (RateLimitError, TimeoutError, 
+
+        except (RateLimitError, TimeoutError,
                 ProviderError, ContentFilterError) as e:
             log_fallback(provider, e)
             continue  # try next provider
-    
+
     # All providers failed
     log_total_failure(tier)
     return GRACEFUL_FAILURE_RESPONSE
