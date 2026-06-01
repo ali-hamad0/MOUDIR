@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: uv sync --frozen
+
+      - name: Lint with ruff
+        working-directory: ./backend
+        run: uv run ruff check .
+
+      - name: Format check with black
+        working-directory: ./backend
+        run: uv run black --check .
+
+      - name: Import test
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://test:test@localhost/test
+          REDIS_URL: redis://localhost:6379/0
+          VAULT_ADDR: http://localhost:8200
+          VAULT_TOKEN: test
+        run: uv run python -c "from app.main import create_app; create_app()"
+
+      - name: Forbidden patterns check
+        run: |
+          ! grep -rn "os.getenv" backend/app/ || (echo "Found os.getenv outside Settings"; exit 1)
+          ! grep -rn "print(" backend/app/ || (echo "Found print() — use structlog"; exit 1)
+          ! grep -rn "import requests" backend/app/ || (echo "Found requests — use httpx.AsyncClient"; exit 1)
