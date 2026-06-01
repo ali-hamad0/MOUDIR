@@ -10,6 +10,17 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class RegisterRequest(BaseModel):
+    """Create a new tenant: the business, its first owner phone, and a dashboard
+    login. One call provisions the whole shop."""
+
+    business_name: str = Field(min_length=1, max_length=255)
+    whatsapp_number: str = Field(min_length=4, max_length=32)
+    owner_phone: str = Field(min_length=4, max_length=32)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
