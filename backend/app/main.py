@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from app.db.session import create_engine
 from app.infra.logging import configure_logging, get_logger
 from app.infra.settings import get_settings
+from app.infra.vault import resolve_secrets
 
 
 @asynccontextmanager
@@ -26,6 +27,9 @@ async def lifespan(app: FastAPI):
         environment=settings.environment,
         log_level=settings.log_level,
     )
+
+    settings = resolve_secrets(settings)
+    log.info("modir.vault.connected")
 
     app.state.db_engine = create_engine()
     log.info("modir.db.engine.created")
