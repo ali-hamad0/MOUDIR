@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     # LLM provider keys — RESOLVED FROM VAULT, not env. Placeholder here.
     gemini_api_key: SecretStr = Field(default=SecretStr("from-vault"))
 
+    # JWT auth — secret RESOLVED FROM VAULT, not env. Placeholder here.
+    jwt_secret: SecretStr = Field(default=SecretStr("from-vault"))
+    jwt_algorithm: str = Field(default="HS256")
+    jwt_expiry_minutes: int = Field(default=15)
+    # Refresh tokens are documented but not implemented in Phase 1 (see DoD).
+    jwt_refresh_expiry_minutes: int = Field(default=60 * 24 * 7)
+
     # Paths
     base_dir: Path = Field(default=Path(__file__).parent.parent.parent)
 
