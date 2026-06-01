@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api import auth
 from app.db.session import create_engine
 from app.infra.logging import configure_logging, get_logger
 from app.infra.settings import get_settings
@@ -58,6 +59,8 @@ def create_app() -> FastAPI:
     async def health():
         """Liveness probe. Used by Docker healthcheck and load balancers."""
         return {"status": "ok"}
+
+    app.include_router(auth.router)
 
     return app
 
