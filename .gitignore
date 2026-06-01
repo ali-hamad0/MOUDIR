@@ -14,5 +14,7 @@ dist/
 build/
 .DS_Store
 docs
+# Dev-only compose overrides (bind-mounts, exposed ports)
+docker-compose.override.yml
 # Claude Code harness artifacts
 .claude/scheduled_tasks.lock
