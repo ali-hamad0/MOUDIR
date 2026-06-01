@@ -13,6 +13,6 @@ node_modules/
 dist/
 build/
 .DS_Store
-
+docs
 # Claude Code harness artifacts
 .claude/scheduled_tasks.lock
