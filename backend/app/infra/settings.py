@@ -35,8 +35,8 @@ class Settings(BaseSettings):
 
     # LLM model selection (non-secret config). Parsing is Tier 1 work — Flash,
     # not Pro (cheaper, fast enough; see ROADMAP Phase 2 pitfall).
-    llm_tier1_model: str = Field(default="gemini-1.5-flash")
-    llm_tier2_model: str = Field(default="gemini-1.5-pro")
+    llm_tier1_model: str = Field(default="gemini-2.5-flash")
+    llm_tier2_model: str = Field(default="gemini-2.5-pro")
     llm_max_retries: int = Field(default=2)  # bad tool output → retry, not crash
 
     # LangSmith tracing — key RESOLVED FROM VAULT, not env. Placeholder here.

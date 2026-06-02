@@ -110,6 +110,18 @@ async def parse_order(
                 error=str(e),
             )
             continue
+        except Exception as e:
+            # Provider / transport failure (auth, rate-limit, timeout, network).
+            # The flow must NEVER 500 on the customer — degrade to a polite reply.
+            # (Phase 8 hardening adds provider fallback in the router itself.)
+            log.warning(
+                "tool.parse_order.llm_error",
+                tenant_id=str(ctx.tenant_id),
+                attempt=attempt + 1,
+                error_type=type(e).__name__,
+                error=str(e),
+            )
+            continue
 
         # Drop any line whose product id is not an available catalog id — the LLM
         # does not get to introduce products even if it tried.

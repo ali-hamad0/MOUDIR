@@ -1,12 +1,31 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.agents.llm.router import GeminiRouter
+from app.agents.order.agent import OrderAgent
 from app.api import auth, owners, profile, webhooks
 from app.db.session import create_engine
 from app.infra.logging import configure_logging, get_logger
-from app.infra.settings import get_settings
+from app.infra.settings import Settings, get_settings
 from app.infra.vault import resolve_secrets
+from app.services.dispatcher import MessageDispatcher
+
+
+def _configure_langsmith(settings: Settings) -> None:
+    """Point LangChain/LangSmith at our project using the Vault-resolved key.
+
+    LangChain reads these from the environment itself, so this is the one place
+    we set os.environ — from a Vault secret, never a literal. (The forbidden-
+    pattern CI gate targets os.getenv, which we still never use.)
+    """
+    if not settings.langsmith_tracing:
+        return
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"] = settings.langsmith_api_key.get_secret_value()
+    os.environ["LANGCHAIN_PROJECT"] = settings.langsmith_project
 
 
 @asynccontextmanager
@@ -35,8 +54,19 @@ async def lifespan(app: FastAPI):
     app.state.db_engine = create_engine()
     log.info("modir.db.engine.created")
 
+    # LLM router + OrderAgent + dispatcher are built ONCE here (constitution IV:
+    # agents/models load once, served via app.state — never per request). The
+    # agent opens its own session per message from this sessionmaker.
+    _configure_langsmith(settings)
+    sessionmaker = async_sessionmaker(
+        app.state.db_engine, class_=AsyncSession, expire_on_commit=False
+    )
+    app.state.llm_router = GeminiRouter(settings)
+    app.state.order_agent = OrderAgent(app.state.llm_router, settings, sessionmaker)
+    app.state.dispatcher = MessageDispatcher(app.state.order_agent, sessionmaker)
+    log.info("modir.agents.ready", langsmith=settings.langsmith_tracing)
+
     # Future: app.state.demand_model = joblib.load(...)
-    # Future: app.state.llm_router = LLMRouter(settings)
 
     yield
 
