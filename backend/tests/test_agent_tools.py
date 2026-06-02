@@ -107,6 +107,23 @@ async def test_parse_order_retries_then_returns_none(db_session: AsyncSession):
     assert structured.calls == 3  # retried, did not crash
 
 
+async def test_parse_order_degrades_on_provider_error(db_session: AsyncSession):
+    ta, cust, _a, _u = await _seed(db_session)
+
+    class _ProviderError(Exception):
+        """Stand-in for ChatGoogleGenerativeAIError (auth / rate-limit / timeout)."""
+
+    structured = _FakeStructured(
+        [_ProviderError("429"), _ProviderError("429"), _ProviderError("429")]
+    )
+    ctx = _ctx(db_session, ta, cust, _FakeRouter(structured))
+    catalog = await get_products(ctx)
+    # A hard provider failure must degrade to None (graceful reply), never crash.
+    result = await parse_order(ctx, "بدي ٥ كعكات", catalog)
+    assert result is None
+    assert structured.calls == 3
+
+
 async def test_parse_order_drops_non_catalog_ids(db_session: AsyncSession):
     ta, cust, avail, _u = await _seed(db_session)
     # LLM returns a valid-shaped order but with a bogus product id not in catalog.
