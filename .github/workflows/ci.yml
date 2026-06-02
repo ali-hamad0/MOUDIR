@@ -72,9 +72,40 @@ jobs:
 
       - name: Forbidden patterns check
         run: |
-          ! grep -rn "os.getenv" backend/app/ || (echo "Found os.getenv outside Settings"; exit 1)
-          ! grep -rn "print(" backend/app/ || (echo "Found print() — use structlog"; exit 1)
-          ! grep -rn "import requests" backend/app/ || (echo "Found requests — use httpx.AsyncClient"; exit 1)
+          # Scan only .py source (never compiled __pycache__ bytecode) and match
+          # actual CALLS, not the words appearing in a comment or string literal.
+          ! grep -rn --include="*.py" "os\.getenv(" backend/app/ \
+            || (echo "Found os.getenv() outside Settings"; exit 1)
+          ! grep -rEn --include="*.py" "(^|[^.[:alnum:]_])print\(" backend/app/ \
+            || (echo "Found print() — use structlog"; exit 1)
+          ! grep -rn --include="*.py" "import requests" backend/app/ \
+            || (echo "Found requests — use httpx.AsyncClient"; exit 1)
+
+      - name: Provider-SDK boundary check
+        run: |
+          # Constitution: application code never imports a provider SDK directly.
+          # The LLM provider SDK is allowed ONLY inside app/agents/llm/ (the router
+          # boundary). Anywhere else in app/ is a violation.
+          offenders=$(grep -rln --include="*.py" \
+            "langchain_google_genai\|google.generativeai\|google.genai" backend/app/ \
+            | grep -v "backend/app/agents/llm/") || true
+          if [ -n "$offenders" ]; then
+            echo "Provider SDK imported outside app/agents/llm/:"
+            echo "$offenders"
+            exit 1
+          fi
+
+      - name: No inline prompts in agents
+        run: |
+          # Prompts live in prompts/ files, never as inline string literals in
+          # agent code (constitution). Flag triple-quoted blocks under app/agents/.
+          offenders=$(grep -rln --include="*.py" '"""' backend/app/agents/ \
+            | xargs -r grep -l 'إنت\|اكتب\|أنت مساعد\|You are' 2>/dev/null) || true
+          if [ -n "$offenders" ]; then
+            echo "Possible inline prompt text in agent code (move to prompts/):"
+            echo "$offenders"
+            exit 1
+          fi
 
       - name: Tenant-scoping guard
         run: |
