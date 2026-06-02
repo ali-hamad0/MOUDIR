@@ -94,6 +94,8 @@ class ProfileService:
         deleted = await ProductRepository(self._session).delete(tenant_id, product_id)
         if not deleted:
             raise HTTPException(status.HTTP_404_NOT_FOUND, profile_ar.PRODUCT_NOT_FOUND)
+        # Drop the KB tracking row too, so no stale entry lingers for Phase 5.
+        await self._kb.delete_by_source(tenant_id, "product", product_id)
         self._audit(tenant_id, actor_id, "product.deleted", str(product_id))
         await self._session.commit()
 

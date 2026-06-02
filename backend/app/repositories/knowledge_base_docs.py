@@ -54,3 +54,13 @@ class KnowledgeBaseDocRepository(TenantScopedRepository[KnowledgeBaseDoc]):
             return existing
 
         return None
+
+    async def delete_by_source(self, tenant_id: UUID, source_type: str, source_id: UUID) -> bool:
+        """Remove the tracking row when its source is deleted, so no stale entry
+        lingers. Returns False if there was nothing to delete."""
+        existing = await self.get_by_source(tenant_id, source_type, source_id)
+        if existing is None:
+            return False
+        await self._session.delete(existing)
+        await self._session.flush()
+        return True
