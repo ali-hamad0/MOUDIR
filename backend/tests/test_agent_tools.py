@@ -11,7 +11,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.order.schemas import ParsedOrder, ParsedOrderItem
+from app.agents.order.schemas import ParsedOrder, ParsedOrderItem, RawOrder, RawOrderItem
 from app.agents.order.tools import (
     ToolContext,
     confirm_order,
@@ -124,25 +124,57 @@ async def test_parse_order_degrades_on_provider_error(db_session: AsyncSession):
     assert structured.calls == 3
 
 
-async def test_parse_order_drops_non_catalog_ids(db_session: AsyncSession):
-    ta, cust, avail, _u = await _seed(db_session)
-    # LLM returns a valid-shaped order but with a bogus product id not in catalog.
-    bogus = ParsedOrder(items=[ParsedOrderItem(product_id=uuid4(), quantity=1)])
-    ctx = _ctx(db_session, ta, cust, _FakeRouter(_FakeStructured([bogus])))
+async def test_parse_order_drops_unmatched_phrase(db_session: AsyncSession):
+    # The LLM returns the customer's RAW phrase "بيتزا" (a thing the shop doesn't
+    # sell). Our code finds no catalog match → the line is dropped → None. This is
+    # the substitution gap closed: the model never picks the id, so it can't map
+    # بيتزا onto كعك's id.
+    ta, cust, _a, _u = await _seed(db_session)
+    raw = RawOrder(items=[RawOrderItem(product_phrase="بيتزا", quantity=1)])
+    ctx = _ctx(db_session, ta, cust, _FakeRouter(_FakeStructured([raw])))
     catalog = await get_products(ctx)
     result = await parse_order(ctx, "بدي بيتزا", catalog)
-    assert result is None  # the bogus line was dropped → nothing left → None
+    assert result is None
 
 
-async def test_parse_order_keeps_valid_catalog_line(db_session: AsyncSession):
+async def test_parse_order_matches_phrase_to_catalog(db_session: AsyncSession):
     ta, cust, avail, _u = await _seed(db_session)
-    good = ParsedOrder(items=[ParsedOrderItem(product_id=avail.id, quantity=3)])
-    ctx = _ctx(db_session, ta, cust, _FakeRouter(_FakeStructured([good])))
+    # "كعكات" (plural) must still match the catalog "كعك" via normalized overlap.
+    raw = RawOrder(items=[RawOrderItem(product_phrase="كعكات", quantity=3)])
+    ctx = _ctx(db_session, ta, cust, _FakeRouter(_FakeStructured([raw])))
     catalog = await get_products(ctx)
     result = await parse_order(ctx, "بدي ٣ كعكات", catalog)
     assert result is not None
     assert result.items[0].product_id == avail.id
     assert result.items[0].quantity == 3
+
+
+async def test_parse_order_mixed_keeps_matched_drops_unmatched(db_session: AsyncSession):
+    # A mixed order: one real product (كعك) + one the shop doesn't sell (بيتزا).
+    # The matched line survives; the unmatched one is dropped. No substitution.
+    ta, cust, avail, _u = await _seed(db_session)
+    raw = RawOrder(
+        items=[
+            RawOrderItem(product_phrase="بيتزا", quantity=2),
+            RawOrderItem(product_phrase="كعك", quantity=1),
+        ]
+    )
+    ctx = _ctx(db_session, ta, cust, _FakeRouter(_FakeStructured([raw])))
+    catalog = await get_products(ctx)
+    result = await parse_order(ctx, "بدي بيتزا وكعكة", catalog)
+    assert result is not None
+    assert len(result.items) == 1
+    assert result.items[0].product_id == avail.id
+
+
+async def test_parse_order_drops_unavailable_phrase(db_session: AsyncSession):
+    # An unavailable product's name is not offered as a match → dropped → None.
+    ta, cust, _a, _unavail = await _seed(db_session)
+    raw = RawOrder(items=[RawOrderItem(product_phrase="منقوشة", quantity=1)])
+    ctx = _ctx(db_session, ta, cust, _FakeRouter(_FakeStructured([raw])))
+    catalog = await get_products(ctx)
+    result = await parse_order(ctx, "بدي منقوشة", catalog)
+    assert result is None
 
 
 async def test_confirm_order_writes_order(db_session: AsyncSession):

@@ -6,6 +6,7 @@ tenant. I/O is Pydantic-validated; bad LLM output in parse_order triggers a retr
 line against the live catalog (the final guard against a hallucinated product).
 """
 
+import re
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -14,7 +15,7 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.llm.router import LLMRouter
-from app.agents.order.schemas import ConfirmedOrder, ParsedOrder
+from app.agents.order.schemas import ConfirmedOrder, ParsedOrder, ParsedOrderItem, RawOrder
 from app.db.models import Order
 from app.domain.identity import ResolvedIdentity
 from app.infra.logging import get_logger
@@ -85,22 +86,68 @@ def _render_catalog(catalog: list[CatalogItem]) -> str:
     return "\n".join(lines) if lines else "(لا يوجد منتجات متوفّرة)"
 
 
+# Arabic normalization for the name match: drop diacritics/tatweel, unify alef
+# and taa-marbuta variants, collapse whitespace. Lenient enough not to reject a
+# real product on a trivial spelling wobble, strict enough that كعك ≠ بيتزا.
+_AR_DIACRITICS = re.compile(r"[ؐ-ًؚ-ٰٟـ]")
+
+
+def _normalize_ar(text: str) -> str:
+    text = _AR_DIACRITICS.sub("", text)
+    text = (
+        text.replace("أ", "ا")
+        .replace("إ", "ا")
+        .replace("آ", "ا")
+        .replace("ة", "ه")
+        .replace("ى", "ي")
+    )
+    return " ".join(text.split()).strip()
+
+
+def _match_phrase_to_catalog(phrase: str, catalog: list[CatalogItem]) -> CatalogItem | None:
+    """Map a customer's raw product phrase to ONE available catalog item, in code.
+
+    Matching is done HERE (not by the LLM) so the model cannot substitute a real
+    product for an unknown request: an unmatched phrase yields None and is dropped.
+    Strategy on normalized Arabic: exact equality, then containment either way,
+    then word-overlap — lenient on spelling, strict on identity (بيتزا won't match
+    كعك). Returns None if no available item matches.
+    """
+    p = _normalize_ar(phrase)
+    if not p:
+        return None
+    p_words = set(p.split())
+    for item in catalog:
+        if not item.is_available:
+            continue
+        n = _normalize_ar(item.name_ar)
+        if p == n or p in n or n in p:
+            return item
+        # Word overlap (handles "كعكات" plural vs "كعك", extra adjectives).
+        if p_words & set(n.split()):
+            return item
+    return None
+
+
 async def parse_order(
     ctx: ToolContext, text: str, catalog: list[CatalogItem]
 ) -> ParsedOrder | None:
-    """Extract a structured order from Lebanese-Arabic text, constrained to the
-    catalog. Returns None when the message cannot be understood as an order or the
-    LLM keeps producing invalid output after retries — the caller replies politely,
-    it does not crash."""
-    model = ctx.router.tier1().with_structured_output(ParsedOrder)
+    """Extract an order from Lebanese-Arabic text and resolve it to the catalog.
+
+    The LLM returns only the customer's RAW phrases + quantities (`RawOrder`); it
+    never picks a catalog id. Our code then matches each phrase to a real product.
+    A phrase with no catalog match is dropped — so the model cannot substitute a
+    real product for an unknown request. Returns None when nothing resolves or the
+    LLM keeps failing after retries; the caller replies politely, never crashes.
+    """
+    model = ctx.router.tier1().with_structured_output(RawOrder)
     system = order_agent_ar.PARSE_ORDER_SYSTEM.format(catalog=_render_catalog(catalog))
     messages = [SystemMessage(content=system), HumanMessage(content=text)]
 
-    valid_ids = {item.id for item in catalog if item.is_available}
     attempts = ctx.settings.llm_max_retries + 1
     for attempt in range(attempts):
         try:
-            parsed: ParsedOrder = await model.ainvoke(messages)
+            raw: RawOrder = await model.ainvoke(messages)
         except (ValidationError, ValueError) as e:
             # Malformed structured output → retry, not crash.
             log.warning(
@@ -123,19 +170,36 @@ async def parse_order(
             )
             continue
 
-        # Drop any line whose product id is not an available catalog id — the LLM
-        # does not get to introduce products even if it tried.
-        parsed.items = [line for line in parsed.items if line.product_id in valid_ids]
-        if not parsed.items:
+        # Resolve each raw phrase to a catalog id IN CODE. Unmatched phrases (an
+        # item the shop does not sell) are dropped — this is the "no hallucinated
+        # catalog item" guarantee, enforced server-side rather than in the prompt.
+        items = []
+        for line in raw.items:
+            match = _match_phrase_to_catalog(line.product_phrase, catalog)
+            if match is None:
+                log.info(
+                    "tool.parse_order.dropped_no_match",
+                    tenant_id=str(ctx.tenant_id),
+                    phrase=line.product_phrase,
+                )
+                continue
+            items.append(ParsedOrderItem(product_id=match.id, quantity=line.quantity))
+
+        if not items:
             log.info("tool.parse_order.no_catalog_items", tenant_id=str(ctx.tenant_id))
             return None
         log.info(
             "tool.parse_order.ok",
             tenant_id=str(ctx.tenant_id),
-            items=len(parsed.items),
+            items=len(items),
             attempt=attempt + 1,
         )
-        return parsed
+        return ParsedOrder(
+            items=items,
+            fulfillment_type=raw.fulfillment_type,
+            requested_time_text=raw.requested_time_text,
+            note=raw.note,
+        )
 
     log.warning("tool.parse_order.exhausted", tenant_id=str(ctx.tenant_id))
     return None
