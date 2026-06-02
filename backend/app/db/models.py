@@ -215,3 +215,78 @@ class KnowledgeBaseDoc(Base):
     content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     embedded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     embedding_status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+
+
+# ── Phase 2 — Customer Order Flow ───────────────────────────────────────────
+
+
+class Order(Base):
+    """A confirmed customer order, scoped to a tenant + customer.
+
+    Phase 2 writes status='confirmed'. No inventory deduction here (Phase 4),
+    no ML (Phase 6). Totals are snapshots taken at confirm time.
+    """
+
+    __tablename__ = "orders"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    customer_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="confirmed")
+    fulfillment_type: Mapped[str] = mapped_column(String(16), nullable=False, default="pickup")
+    # The customer's raw Arabic time phrase ("بكرا الصبح"); a parsed timestamp is
+    # best-effort and may be null in Phase 2.
+    requested_time_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    requested_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    total_lbp: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_usd: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    raw_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class OrderItem(Base):
+    """One line of an order.
+
+    References a real products.id for THIS tenant; the product name and unit
+    price are snapshotted so a later catalog edit can never rewrite a past order
+    (the catalog is mutable; the order is a record).
+    """
+
+    __tablename__ = "order_items"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    order_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("orders.id"), nullable=False, index=True
+    )
+    product_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("products.id"), nullable=False, index=True
+    )
+    name_ar_snapshot: Mapped[str] = mapped_column(String(255), nullable=False)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    unit_price_lbp: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    unit_price_usd: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    line_total_lbp: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class OrderEvent(Base):
+    """Lightweight per-order trail (created, rail_tripped, parse_retry, ...).
+
+    The cross-cutting audit_log still records tenant-level events via
+    AuditService; this table keeps order-specific breadcrumbs close to the order.
+    """
+
+    __tablename__ = "order_events"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    order_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("orders.id"), nullable=True, index=True
+    )
+    event: Mapped[str] = mapped_column(String(64), nullable=False)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
