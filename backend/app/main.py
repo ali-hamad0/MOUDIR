@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import auth, owners
+from app.api import auth, owners, profile
 from app.db.session import create_engine
 from app.infra.logging import configure_logging, get_logger
 from app.infra.settings import get_settings
@@ -62,6 +62,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth.router)
     app.include_router(owners.router)
+    app.include_router(profile.router)
 
     return app
 
