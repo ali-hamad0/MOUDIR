@@ -33,6 +33,17 @@ class Settings(BaseSettings):
     # LLM provider keys — RESOLVED FROM VAULT, not env. Placeholder here.
     gemini_api_key: SecretStr = Field(default=SecretStr("from-vault"))
 
+    # LLM model selection (non-secret config). Parsing is Tier 1 work — Flash,
+    # not Pro (cheaper, fast enough; see ROADMAP Phase 2 pitfall).
+    llm_tier1_model: str = Field(default="gemini-1.5-flash")
+    llm_tier2_model: str = Field(default="gemini-1.5-pro")
+    llm_max_retries: int = Field(default=2)  # bad tool output → retry, not crash
+
+    # LangSmith tracing — key RESOLVED FROM VAULT, not env. Placeholder here.
+    langsmith_api_key: SecretStr = Field(default=SecretStr("from-vault"))
+    langsmith_project: str = Field(default="modir-phase2")
+    langsmith_tracing: bool = Field(default=True)
+
     # JWT auth — secret RESOLVED FROM VAULT, not env. Placeholder here.
     jwt_secret: SecretStr = Field(default=SecretStr("from-vault"))
     jwt_algorithm: str = Field(default="HS256")

@@ -40,6 +40,7 @@ def resolve_secrets(settings):
     vault = VaultClient()
     secrets_map = {
         "gemini_api_key": ("modir/llm", "gemini_api_key"),
+        "langsmith_api_key": ("modir/llm", "langsmith_api_key"),
         "minio_access_key": ("modir/minio", "access_key"),
         "minio_secret_key": ("modir/minio", "secret_key"),
         "jwt_secret": ("modir/auth", "jwt_secret"),
