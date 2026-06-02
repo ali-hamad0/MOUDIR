@@ -6,12 +6,15 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.schemas.webhook import WhatsAppWebhookPayload
 from app.db.models import Tenant, User
 from app.db.session import get_db_session
+from app.domain.identity import ResolvedIdentity
 from app.infra.security import decode_access_token
 from app.infra.settings import Settings, get_settings
 from app.repositories.tenants import TenantRepository
 from app.repositories.users import UserRepository
+from app.services.identity_resolver import IdentityResolver
 
 _bearer = HTTPBearer(auto_error=True)
 
@@ -45,3 +48,14 @@ async def get_current_tenant(
     if tenant is None or not tenant.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Tenant inactive or missing")
     return tenant
+
+
+async def resolve_message_identity(
+    payload: WhatsAppWebhookPayload,
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> ResolvedIdentity:
+    """Phase 2's webhook route will depend on this to know who is talking and to
+    which shop, before dispatching to an agent."""
+    return await IdentityResolver(db).resolve(
+        to=payload.to, from_=payload.from_, display_name=payload.display_name
+    )
