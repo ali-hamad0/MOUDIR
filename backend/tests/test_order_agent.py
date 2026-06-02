@@ -8,13 +8,12 @@ writes land in the rolled-back transaction.
 
 from contextlib import asynccontextmanager
 from decimal import Decimal
-from uuid import uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.order.agent import OrderAgent
-from app.agents.order.schemas import ParsedOrder, ParsedOrderItem
+from app.agents.order.schemas import RawOrder, RawOrderItem
 from app.db.models import Customer, Order, Product, Tenant
 from app.domain.identity import ResolvedIdentity
 from app.infra.settings import Settings
@@ -99,8 +98,8 @@ def _identity(tenant, customer) -> ResolvedIdentity:
 
 async def test_happy_path_writes_order_and_confirms(db_session: AsyncSession):
     ta, cust, avail, _u = await _seed(db_session)
-    good = ParsedOrder(
-        items=[ParsedOrderItem(product_id=avail.id, quantity=5)],
+    good = RawOrder(
+        items=[RawOrderItem(product_phrase="كعكات", quantity=5)],
         fulfillment_type="pickup",
         requested_time_text="بكرا الصبح",
     )
@@ -119,8 +118,9 @@ async def test_happy_path_writes_order_and_confirms(db_session: AsyncSession):
 
 async def test_not_in_catalog_replies_without_order(db_session: AsyncSession):
     ta, cust, _a, _u = await _seed(db_session)
-    # LLM proposes a bogus id → parse drops it → no items → "didn't understand".
-    bogus = ParsedOrder(items=[ParsedOrderItem(product_id=uuid4(), quantity=1)])
+    # LLM returns the raw phrase "بيتزا" → code finds no catalog match → no items
+    # → "didn't understand". The model never picks an id, so no substitution.
+    bogus = RawOrder(items=[RawOrderItem(product_phrase="بيتزا", quantity=1)])
     agent = _agent(db_session, _FakeRouter(_FakeStructured([bogus])))
     reply = await agent.handle("بدي بيتزا", _identity(ta, cust))
 
@@ -136,12 +136,12 @@ async def test_not_in_catalog_replies_without_order(db_session: AsyncSession):
 async def test_unavailable_product_is_not_offered_and_drops_to_graceful_reply(
     db_session: AsyncSession,
 ):
-    ta, cust, _a, unavail = await _seed(db_session)
-    # The model returns the unavailable product's id, but parse_order only offers
-    # AVAILABLE ids — so the line is dropped at parse and never reaches confirm.
-    # (The confirm-time ProductUnavailable/ProductNotInCatalog guards are proven
-    # directly in test_agent_tools.py.) Result: graceful reply, no order.
-    proposal = ParsedOrder(items=[ParsedOrderItem(product_id=unavail.id, quantity=1)])
+    ta, cust, _a, _unavail = await _seed(db_session)
+    # The customer asks for منقوشة, which exists but is unavailable. Code matching
+    # only offers AVAILABLE items, so the phrase finds no match → dropped at parse,
+    # never reaches confirm. (The confirm-time guards are proven in
+    # test_agent_tools.py.) Result: graceful reply, no order.
+    proposal = RawOrder(items=[RawOrderItem(product_phrase="منقوشة", quantity=1)])
     agent = _agent(db_session, _FakeRouter(_FakeStructured([proposal])))
     reply = await agent.handle("بدي منقوشة", _identity(ta, cust))
     assert reply == order_ar.DID_NOT_UNDERSTAND
