@@ -5,8 +5,9 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import AuditLog, TenantOwner
+from app.db.models import TenantOwner
 from app.repositories.tenant_owners import TenantOwnerRepository
+from app.services.audit import AuditService
 from prompts import owners_ar
 
 
@@ -20,6 +21,7 @@ class OwnerVerificationService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self._owners = TenantOwnerRepository(session)
+        self._audit = AuditService(session)
 
     async def add_owner(
         self, *, tenant_id: UUID, actor_id: UUID, phone_number: str, name: str | None
@@ -36,13 +38,11 @@ class OwnerVerificationService:
                 verification_status="pending",
             ),
         )
-        self._session.add(
-            AuditLog(
-                tenant_id=tenant_id,
-                actor_id=actor_id,
-                action="owner.add_requested",
-                target=phone_number,
-            )
+        await self._audit.record(
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+            action="owner.add_requested",
+            target=phone_number,
         )
         await self._session.commit()
         return owner
@@ -66,13 +66,11 @@ class OwnerVerificationService:
         owner.verification_status = "verified"
         owner.verified_at = datetime.now(UTC)
         owner.verification_token = None  # single-use; clear once consumed
-        self._session.add(
-            AuditLog(
-                tenant_id=tenant_id,
-                actor_id=actor_id,
-                action="owner.verified",
-                target=owner.phone_number,
-            )
+        await self._audit.record(
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+            action="owner.verified",
+            target=owner.phone_number,
         )
         await self._session.commit()
         return owner

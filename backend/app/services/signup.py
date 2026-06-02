@@ -5,12 +5,13 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.auth import RegisterRequest
-from app.db.models import AuditLog, BusinessProfile, Tenant, TenantOwner, User
+from app.db.models import BusinessProfile, Tenant, TenantOwner, User
 from app.infra.security import hash_password
 from app.repositories.business_profile import BusinessProfileRepository
 from app.repositories.tenant_owners import TenantOwnerRepository
 from app.repositories.tenants import TenantRepository
 from app.repositories.users import UserRepository
+from app.services.audit import AuditService
 from prompts import auth_ar
 
 
@@ -62,7 +63,7 @@ async def register_tenant(db: AsyncSession, payload: RegisterRequest) -> Registe
     # Blank profile so the shop has a profile row from day one (Task 1.12 fills it).
     await BusinessProfileRepository(db).add(tenant.id, BusinessProfile())
 
-    db.add(AuditLog(tenant_id=tenant.id, actor_id=user.id, action="tenant.signup"))
+    await AuditService(db).record(tenant_id=tenant.id, actor_id=user.id, action="tenant.signup")
 
     await db.commit()
     return RegisteredTenant(tenant=tenant, user=user)

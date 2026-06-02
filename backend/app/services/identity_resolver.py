@@ -1,11 +1,12 @@
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import AuditLog, Customer
+from app.db.models import Customer
 from app.domain.identity import ResolvedIdentity
 from app.repositories.customers import CustomerRepository
 from app.repositories.tenant_owners import TenantOwnerRepository
 from app.repositories.tenants import TenantRepository
+from app.services.audit import AuditService
 
 
 class IdentityResolver:
@@ -40,12 +41,10 @@ class IdentityResolver:
             customer = await customers.add(
                 tenant.id, Customer(phone_number=from_, display_name=display_name)
             )
-            self._session.add(
-                AuditLog(
-                    tenant_id=tenant.id,
-                    actor_id=customer.id,
-                    action="customer.autocreate",
-                )
+            await AuditService(self._session).record(
+                tenant_id=tenant.id,
+                actor_id=customer.id,
+                action="customer.autocreate",
             )
             await self._session.commit()
 

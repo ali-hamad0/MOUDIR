@@ -11,7 +11,6 @@ from app.api.schemas.profile import (
     ProfileUpsert,
 )
 from app.db.models import (
-    AuditLog,
     BusinessPolicy,
     BusinessProfile,
     OperatingHours,
@@ -22,6 +21,7 @@ from app.repositories.business_profile import BusinessProfileRepository
 from app.repositories.knowledge_base_docs import KnowledgeBaseDocRepository
 from app.repositories.operating_hours import OperatingHoursRepository
 from app.repositories.products import ProductRepository
+from app.services.audit import AuditService
 from prompts import profile_ar
 
 
@@ -41,10 +41,11 @@ class ProfileService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self._kb = KnowledgeBaseDocRepository(session)
+        self._audit_service = AuditService(session)
 
-    def _audit(self, tenant_id: UUID, actor_id: UUID, action: str, target: str) -> None:
-        self._session.add(
-            AuditLog(tenant_id=tenant_id, actor_id=actor_id, action=action, target=target)
+    async def _audit(self, tenant_id: UUID, actor_id: UUID, action: str, target: str) -> None:
+        await self._audit_service.record(
+            tenant_id=tenant_id, actor_id=actor_id, action=action, target=target
         )
 
     # ---- Profile ----
@@ -58,7 +59,7 @@ class ProfileService:
         for field, value in data.model_dump().items():
             setattr(profile, field, value)
         await self._session.flush()
-        self._audit(tenant_id, actor_id, "profile.updated", "business_profile")
+        await self._audit(tenant_id, actor_id, "profile.updated", "business_profile")
         await self._session.commit()
         return profile
 
@@ -70,7 +71,7 @@ class ProfileService:
             tenant_id, Product(**data.model_dump())
         )
         await self._track_product(tenant_id, product)
-        self._audit(tenant_id, actor_id, "product.created", str(product.id))
+        await self._audit(tenant_id, actor_id, "product.created", str(product.id))
         await self._session.commit()
         return product
 
@@ -86,7 +87,7 @@ class ProfileService:
             setattr(product, field, value)
         await self._session.flush()
         await self._track_product(tenant_id, product)
-        self._audit(tenant_id, actor_id, "product.updated", str(product.id))
+        await self._audit(tenant_id, actor_id, "product.updated", str(product.id))
         await self._session.commit()
         return product
 
@@ -96,7 +97,7 @@ class ProfileService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, profile_ar.PRODUCT_NOT_FOUND)
         # Drop the KB tracking row too, so no stale entry lingers for Phase 5.
         await self._kb.delete_by_source(tenant_id, "product", product_id)
-        self._audit(tenant_id, actor_id, "product.deleted", str(product_id))
+        await self._audit(tenant_id, actor_id, "product.deleted", str(product_id))
         await self._session.commit()
 
     async def _track_product(self, tenant_id: UUID, product: Product) -> None:
@@ -140,7 +141,7 @@ class ProfileService:
                 ),
             )
             result.append(row)
-        self._audit(tenant_id, actor_id, "hours.updated", "operating_hours")
+        await self._audit(tenant_id, actor_id, "hours.updated", "operating_hours")
         await self._session.commit()
         return result
 
@@ -163,6 +164,6 @@ class ProfileService:
                 _content_hash(policy.key, policy.value),
             )
             result.append(policy)
-        self._audit(tenant_id, actor_id, "policies.updated", "business_policies")
+        await self._audit(tenant_id, actor_id, "policies.updated", "business_policies")
         await self._session.commit()
         return result
