@@ -3,9 +3,11 @@ from typing import Protocol
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.agents.guardrails import check_input, redact_pii
+from app.db.models import Customer
 from app.domain.identity import ResolvedIdentity
 from app.infra.logging import get_logger
 from app.services.audit import AuditService
+from app.services.customer_enrichment import CustomerEnrichmentService
 from prompts import order_ar
 
 log = get_logger(__name__)
@@ -59,6 +61,9 @@ class MessageDispatcher:
             )
             return order_ar.RAIL_REFUSAL
 
+        # --- Customer name enrichment (best-effort; never blocks the order) ---
+        await self._maybe_enrich_customer(identity, text)
+
         reply = await self._order_agent.handle(text or "", identity)
 
         # --- Output rail (Layer 2): PII redaction on the outgoing text ---
@@ -76,3 +81,20 @@ class MessageDispatcher:
                 target=reason,
             )
             await session.commit()
+
+    async def _maybe_enrich_customer(self, identity: ResolvedIdentity, text: str | None) -> None:
+        # Only customers carry a display_name to enrich; never let a failure here
+        # break the order flow.
+        if not isinstance(identity.actor, Customer):
+            return
+        try:
+            async with self._sessionmaker() as session:
+                await CustomerEnrichmentService(session).enrich_from_message(
+                    tenant_id=identity.tenant.id, customer=identity.actor, text=text
+                )
+        except Exception as e:  # enrichment is best-effort, not on the critical path
+            log.warning(
+                "customer.enrich.failed",
+                tenant_id=str(identity.tenant.id),
+                error=str(e),
+            )
