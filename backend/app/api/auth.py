@@ -4,12 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
-from app.db.models import AuditLog
 from app.db.session import get_db_session
 from app.infra.security import create_access_token, verify_password
 from app.infra.settings import Settings, get_settings
 from app.repositories.tenants import TenantRepository
 from app.repositories.users import UserRepository
+from app.services.audit import AuditService
 from app.services.signup import register_tenant
 from prompts import auth_ar
 
@@ -50,8 +50,7 @@ async def login(
     if user is None or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, auth_ar.INVALID_CREDENTIALS)
 
-    # Audit the successful login. (Task 1.13 routes this through AuditService.)
-    db.add(AuditLog(tenant_id=tenant.id, actor_id=user.id, action="user.login"))
+    await AuditService(db).record(tenant_id=tenant.id, actor_id=user.id, action="user.login")
     await db.commit()
 
     token = create_access_token(settings, user_id=user.id, tenant_id=tenant.id)
