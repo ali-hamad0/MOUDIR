@@ -1,9 +1,9 @@
 """Task 2.10 — conversational guardrails (Layer 2).
 
-Tests the rail functions directly. Wiring into the dispatcher + audit-logging a
-tripped rail is verified against the full flow in Task 2.14; here we prove the
-rails themselves: injection/jailbreak detection, the "no hallucinated catalog
-item" output check, and PII redaction.
+Tests the rail functions directly: injection/jailbreak detection, the
+"no hallucinated catalog item" output check, and PII redaction. The end-to-end
+flow (rail refusal through the dispatcher + audit-logging + the Wall reaffirmed
+at the agent boundary) lives in test_guardrails_e2e.py (Task 2.14).
 """
 
 import pytest
