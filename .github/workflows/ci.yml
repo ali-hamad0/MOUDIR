@@ -9,6 +9,34 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+
+    services:
+      # Real Postgres with pgvector so PG-specific types/constraints (and future
+      # vector search) behave like prod — tests never run against sqlite.
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: modir
+          POSTGRES_PASSWORD: modir
+          POSTGRES_DB: modir
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U modir"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      # The app's Settings require these. DB points at the service container;
+      # the rest are throwaway test values (no Vault in CI — see import test).
+      DATABASE_URL: postgresql+asyncpg://modir:modir@localhost:5432/modir
+      REDIS_URL: redis://localhost:6379/0
+      VAULT_ADDR: http://localhost:8200
+      VAULT_TOKEN: test
+      # Tests connect here directly (conftest reads TEST_DATABASE_URL).
+      TEST_DATABASE_URL: postgresql+asyncpg://modir:modir@localhost:5432/modir
+
     steps:
       - uses: actions/checkout@v4
 
@@ -32,15 +60,37 @@ jobs:
 
       - name: Import test
         working-directory: ./backend
-        env:
-          DATABASE_URL: postgresql+asyncpg://test:test@localhost/test
-          REDIS_URL: redis://localhost:6379/0
-          VAULT_ADDR: http://localhost:8200
-          VAULT_TOKEN: test
         run: uv run python -c "from app.main import create_app; create_app()"
+
+      - name: Run migrations
+        working-directory: ./backend
+        run: uv run alembic upgrade head
+
+      - name: Run tests
+        working-directory: ./backend
+        run: uv run pytest tests -v
 
       - name: Forbidden patterns check
         run: |
           ! grep -rn "os.getenv" backend/app/ || (echo "Found os.getenv outside Settings"; exit 1)
           ! grep -rn "print(" backend/app/ || (echo "Found print() — use structlog"; exit 1)
           ! grep -rn "import requests" backend/app/ || (echo "Found requests — use httpx.AsyncClient"; exit 1)
+
+      - name: Tenant-scoping guard
+        run: |
+          # The Wall is enforced by the base repository. Guard against regressions:
+          # 1) No raw SQL in the repository layer — everything goes through the
+          #    tenant-scoped query builder, never a hand-written text() string.
+          ! grep -rn "text(" backend/app/repositories/ \
+            || (echo "Raw text() SQL in repositories bypasses tenant scoping"; exit 1)
+          # 2) Every repository class must extend TenantScopedRepository, except
+          #    TenantRepository (the documented root — Tenant has no tenant_id).
+          offenders=$(grep -rn "^class .*Repository" backend/app/repositories/ \
+            | grep -v "TenantScopedRepository" \
+            | grep -v "class TenantScopedRepository" \
+            | grep -v "class TenantRepository:") || true
+          if [ -n "$offenders" ]; then
+            echo "Repository not extending TenantScopedRepository (and not the root TenantRepository):"
+            echo "$offenders"
+            exit 1
+          fi
