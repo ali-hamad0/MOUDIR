@@ -25,6 +25,26 @@ running shop. Each phase is independently demoable.
 
 ---
 
+## Planned Insertions (cross-cutting work, scheduled by trigger not number)
+
+Two pieces were specced after the original roadmap. They are NOT extra numbered
+phases — they fold into existing ones at the point they become necessary:
+
+- **Founder-gated onboarding** (`.specify/memory/phases/PHASE_1.5_FOUNDER_ONBOARDING.md`)
+  — request → founder approval → activation email → owner sets own password.
+  **Trigger:** must be in place BEFORE the first real (non-test) shop is onboarded
+  or any public/beta launch. **Natural home: alongside Phase 3** (the dashboard
+  gives the founder a real approvals screen). Until then, self-service signup is
+  fine for development.
+
+- **Conversational guardrails** (`.specify/memory/GUARDRAILS.md`) — prompt-injection
+  / jailbreak input rails, output moderation, "no hallucinated catalog item."
+  **Trigger:** the first input/output rails ship WITH the first agent in **Phase 2**
+  (the "no hallucinated catalog item" rail is already a Phase 2 DoD item).
+  Consolidated across agents in **Phase 7**; red-team eval in CI in **Phase 8**.
+
+---
+
 ## Core Concept — How Modir Identifies Who's Talking
 
 Before any phase, internalize this. Every WhatsApp message Modir receives
@@ -257,6 +277,10 @@ subsequent phase uses it.
 
 ## Phase 2 — Customer Order Flow (The Heartbeat)
 
+> 🛡️ **Guardrails start here.** This is the first agent, so the first
+> conversational guardrails ship with it (input rails + "no hallucinated catalog
+> item"). See `.specify/memory/GUARDRAILS.md` and "Planned Insertions" above.
+
 **Goal:** A customer messages a business's WhatsApp number in Lebanese
 Arabic. Modir uses the Phase 1 identity resolver to know it's a customer
 (not the owner), runs the OrderAgent, saves the order, and replies. The
@@ -336,6 +360,11 @@ What ships in Phase 2:
 ---
 
 ## Phase 3 — Owner Dashboard (See What's Happening)
+
+> 🚪 **Founder-gated onboarding folds in around here** (`PHASE_1.5_FOUNDER_ONBOARDING.md`).
+> The dashboard is where the founder gets a real approvals screen, so build the
+> request → approve → activation flow alongside this phase. HARD REQUIREMENT: it
+> must be done before onboarding the first real shop or any public launch.
 
 **Goal:** Abu Khaled logs into the dashboard and does two things: first he
 sets up his shop (products, hours, policies) so the system knows what it's
