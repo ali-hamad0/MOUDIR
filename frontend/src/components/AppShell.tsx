@@ -1,9 +1,13 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/context";
 import { planLabel, t } from "../i18n";
 import { NAV_ITEMS } from "../nav";
 import { LogoutIcon } from "./icons";
+import { SetupBanner } from "./SetupBanner";
+
+const FIRST_LOGIN_REDIRECT_KEY = "modir.wizardRedirected";
 
 // Mobile-first RTL shell: a sidebar at ≥lg (1024px), a bottom nav on phones
 // (ux adaptive-navigation). The active route is highlighted; logout is visually
@@ -11,6 +15,25 @@ import { LogoutIcon } from "./icons";
 // the i18n dictionary, never inline literals.
 export function AppShell() {
   const { me, logout } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const redirected = useRef(false);
+
+  // First login with an incomplete shop → launch the wizard automatically, but
+  // only ONCE per session (sessionStorage-flagged). After that the owner can
+  // navigate freely; the persistent banner keeps nudging until setup is done.
+  useEffect(() => {
+    if (!me || me.setup_complete) return;
+    if (redirected.current) return;
+    if (sessionStorage.getItem(FIRST_LOGIN_REDIRECT_KEY)) return;
+    if (location.pathname === "/setup") return;
+    redirected.current = true;
+    sessionStorage.setItem(FIRST_LOGIN_REDIRECT_KEY, "1");
+    navigate("/setup", { replace: true });
+  }, [me, location.pathname, navigate]);
+
+  const showSetupBanner =
+    me != null && !me.setup_complete && location.pathname !== "/setup";
 
   return (
     <div className="min-h-dvh bg-background text-foreground">
@@ -75,6 +98,7 @@ export function AppShell() {
       {/* ----- Content ----- */}
       <main className="px-4 py-5 pb-24 lg:ps-72 lg:pb-8 lg:pe-8">
         <div className="mx-auto max-w-3xl">
+          {showSetupBanner && <SetupBanner />}
           <Outlet />
         </div>
       </main>
