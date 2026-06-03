@@ -2,6 +2,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.agents.llm.router import GeminiRouter
@@ -83,6 +84,18 @@ def create_app() -> FastAPI:
         description="AI business operations assistant for Lebanese SMEs",
         version="0.1.0",
         lifespan=lifespan,
+    )
+
+    # The dashboard (Phase 3) is a separate origin; allow it explicitly. Origins
+    # come from typed Settings, never "*" with credentials. Methods/headers are
+    # limited to what the dashboard actually uses (auth header + JSON bodies).
+    settings = get_settings()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allow_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
     )
 
     @app.get("/health")
