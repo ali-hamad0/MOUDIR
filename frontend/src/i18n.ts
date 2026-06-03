@@ -50,6 +50,19 @@ export const t = {
   statusPreparing: "عم نحضّر",
   statusDelivered: "تسلّم",
   qtyTimes: "×", // "2 ×" before an item name
+  // Customers list
+  customersTitle: "الزباين",
+  noCustomersYet: "ما في زباين بعد",
+  noCustomersHint: "أول ما يطلب زبون رح يبيّن هون.",
+  customersError: "ما قدرنا نجيب الزباين.",
+  colCustomer: "الزبون",
+  colOrders: "الطلبات",
+  colTotalSpent: "مجموع المصاريف",
+  colLastOrder: "آخر طلب",
+  // Pagination
+  prevPage: "السابق",
+  nextPage: "التالي",
+  pageOf: "صفحة {n} من {total}",
   // Generic actions
   next: "التالي",
   back: "رجوع",

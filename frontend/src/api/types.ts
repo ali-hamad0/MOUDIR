@@ -56,6 +56,26 @@ export interface OrdersPage {
   offset: number;
 }
 
+// ---- Customers list (mirrors app/api/schemas/customers.py) ----
+
+export interface CustomerRead {
+  id: string;
+  display_name: string | null;
+  phone_number: string;
+  first_seen_at: string;
+  order_count: number;
+  total_spent_lbp: number;
+  total_spent_usd: string | null;
+  last_order_at: string | null;
+}
+
+export interface CustomersPage {
+  items: CustomerRead[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 // ---- Profile / catalog (mirrors app/api/schemas/profile.py) ----
 
 // PUT /profile  (ProfileUpsert)

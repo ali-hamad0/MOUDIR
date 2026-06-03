@@ -32,3 +32,14 @@ export function formatTime(iso: string): string {
     timeZone: "Asia/Beirut",
   });
 }
+
+/** Short Beirut date, e.g. "03/06/2026". Null → em dash. */
+export function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "Asia/Beirut",
+  });
+}
