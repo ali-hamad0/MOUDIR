@@ -7,7 +7,7 @@ import CustomersPage from "./pages/CustomersPage";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import OrdersPage from "./pages/OrdersPage";
-import SetupPage from "./pages/SetupPage";
+import SetupWizard from "./pages/SetupWizard";
 
 export default function App() {
   return (
@@ -27,7 +27,7 @@ export default function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/customers" element={<CustomersPage />} />
-            <Route path="/setup" element={<SetupPage />} />
+            <Route path="/setup" element={<SetupWizard />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -1,0 +1,420 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+import { ApiError } from "../api/client";
+import { profileApi } from "../api/profile";
+import type {
+  DayHours,
+  PolicyUpsert,
+  ProductWrite,
+  ProfileUpsert,
+} from "../api/types";
+import { useAuth } from "../auth/context";
+import { Button } from "../components/Button";
+import { Field } from "../components/Field";
+import { Toggle } from "../components/Toggle";
+import { DAY_LABELS, t } from "../i18n";
+
+const STEP_TITLES = [
+  t.stepBusinessTitle,
+  t.stepProductsTitle,
+  t.stepHoursTitle,
+  t.stepPoliciesTitle,
+];
+
+export default function SetupWizard() {
+  const navigate = useNavigate();
+  const { refreshMe } = useAuth();
+
+  const [step, setStep] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // ---- Step state ----
+  const [profile, setProfile] = useState<ProfileUpsert>({
+    business_name: "",
+    description: "",
+    location: "",
+    delivery_radius_km: null,
+    accepts_delivery: false,
+    accepts_pickup: true,
+  });
+  const [products, setProducts] = useState<ProductWrite[]>([]);
+  const [hours, setHours] = useState<DayHours[]>(
+    DAY_LABELS.map((_, i) => ({
+      day_of_week: i,
+      open_time: "08:00",
+      close_time: "20:00",
+      is_closed: false,
+      note_ar: null,
+    })),
+  );
+  const [policies, setPolicies] = useState<Record<string, string>>({
+    min_order_lbp: "",
+    delivery_fee_lbp: "",
+    delivery_zones: "",
+    payment_methods: "",
+  });
+
+  // Each step persists its own slice to its existing endpoint, then advances —
+  // so progress is saved as you go (form-autosave) and a later failure never
+  // loses earlier steps.
+  async function persistAndAdvance() {
+    setError(null);
+    setBusy(true);
+    try {
+      if (step === 0) {
+        if (!profile.business_name?.trim()) {
+          setError(t.required);
+          return;
+        }
+        await profileApi.saveProfile(profile);
+        setStep(1);
+      } else if (step === 1) {
+        if (products.length === 0) {
+          setError(t.atLeastOneProduct);
+          return;
+        }
+        // Products are created individually; already-created ones aren't
+        // recreated because we only get here once per advance.
+        for (const p of products) await profileApi.createProduct(p);
+        setStep(2);
+      } else if (step === 2) {
+        await profileApi.replaceHours(hours);
+        setStep(3);
+      } else {
+        const entries: PolicyUpsert[] = Object.entries(policies)
+          .filter(([, v]) => v.trim() !== "")
+          .map(([key, value]) => ({ key, value }));
+        await profileApi.savePolicies(entries);
+        await refreshMe(); // setup_complete flips → banner clears (Task 3.10)
+        navigate("/", { replace: true });
+      }
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 0
+          ? t.networkError
+          : t.errorGeneric,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      <header>
+        <h2 className="text-xl font-bold text-foreground">{t.wizardWelcome}</h2>
+        <StepIndicator current={step} count={STEP_TITLES.length} />
+        <p className="mt-2 text-sm font-medium text-primary">
+          {STEP_TITLES[step]}
+        </p>
+      </header>
+
+      <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        {step === 0 && <BusinessStep value={profile} onChange={setProfile} />}
+        {step === 1 && (
+          <ProductsStep products={products} onChange={setProducts} />
+        )}
+        {step === 2 && <HoursStep hours={hours} onChange={setHours} />}
+        {step === 3 && (
+          <PoliciesStep policies={policies} onChange={setPolicies} />
+        )}
+      </section>
+
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
+
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => setStep((s) => Math.max(0, s - 1))}
+          disabled={step === 0 || busy}
+          className="min-h-[44px] rounded-lg px-4 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+        >
+          {t.back}
+        </button>
+        <Button onClick={persistAndAdvance} loading={busy}>
+          {step === STEP_TITLES.length - 1 ? t.finish : t.next}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function StepIndicator({ current, count }: { current: number; count: number }) {
+  return (
+    <div
+      className="mt-3 flex items-center gap-1.5"
+      aria-label={`${t.wizardStep} ${current + 1} ${t.wizardOf} ${count}`}
+    >
+      {Array.from({ length: count }).map((_, i) => (
+        <span
+          key={i}
+          className={`h-1.5 flex-1 rounded-full transition-colors ${
+            i <= current ? "bg-primary" : "bg-border"
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Step 1
+function BusinessStep({
+  value,
+  onChange,
+}: {
+  value: ProfileUpsert;
+  onChange: (v: ProfileUpsert) => void;
+}) {
+  const set = (patch: Partial<ProfileUpsert>) =>
+    onChange({ ...value, ...patch });
+  return (
+    <div className="flex flex-col gap-4">
+      <Field
+        name="business_name"
+        label={t.businessName}
+        value={value.business_name ?? ""}
+        onChange={(e) => set({ business_name: e.target.value })}
+      />
+      <Field
+        name="location"
+        label={`${t.businessLocation} (${t.optional})`}
+        value={value.location ?? ""}
+        onChange={(e) => set({ location: e.target.value })}
+      />
+      <Field
+        name="delivery_radius_km"
+        label={`${t.deliveryRadiusKm} (${t.optional})`}
+        type="number"
+        inputMode="numeric"
+        min={0}
+        value={value.delivery_radius_km ?? ""}
+        onChange={(e) =>
+          set({
+            delivery_radius_km: e.target.value ? Number(e.target.value) : null,
+          })
+        }
+      />
+      <Toggle
+        label={t.acceptsDelivery}
+        checked={value.accepts_delivery}
+        onChange={(v) => set({ accepts_delivery: v })}
+      />
+      <Toggle
+        label={t.acceptsPickup}
+        checked={value.accepts_pickup}
+        onChange={(v) => set({ accepts_pickup: v })}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Step 2
+function ProductsStep({
+  products,
+  onChange,
+}: {
+  products: ProductWrite[];
+  onChange: (p: ProductWrite[]) => void;
+}) {
+  const [draft, setDraft] = useState<ProductWrite>({
+    name_ar: "",
+    price_lbp: null,
+    price_usd: null,
+    is_available: true,
+  });
+
+  function addDraft() {
+    if (!draft.name_ar.trim()) return;
+    onChange([...products, draft]);
+    setDraft({ name_ar: "", price_lbp: null, price_usd: null, is_available: true });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {products.length === 0 ? (
+        <p className="text-sm text-muted-foreground">{t.noProductsYet}</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {products.map((p, i) => (
+            <li
+              key={i}
+              className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
+            >
+              <span className="font-medium">{p.name_ar}</span>
+              <span className="flex items-center gap-2">
+                <span className="tabular text-muted-foreground">
+                  {p.price_lbp ? `${p.price_lbp} ل.ل.` : "—"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onChange(products.filter((_, j) => j !== i))}
+                  className="text-destructive hover:underline"
+                >
+                  {t.remove}
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border p-3">
+        <Field
+          name="name_ar"
+          label={t.productNameAr}
+          value={draft.name_ar}
+          onChange={(e) => setDraft({ ...draft, name_ar: e.target.value })}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <Field
+            name="price_lbp"
+            label={t.priceLbp}
+            type="number"
+            inputMode="numeric"
+            min={0}
+            value={draft.price_lbp ?? ""}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                price_lbp: e.target.value ? Number(e.target.value) : null,
+              })
+            }
+          />
+          <Field
+            name="price_usd"
+            label={t.priceUsd}
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="0.01"
+            value={draft.price_usd ?? ""}
+            onChange={(e) =>
+              setDraft({ ...draft, price_usd: e.target.value || null })
+            }
+          />
+        </div>
+        <Toggle
+          label={t.isAvailable}
+          checked={draft.is_available}
+          onChange={(v) => setDraft({ ...draft, is_available: v })}
+        />
+        <Button
+          type="button"
+          onClick={addDraft}
+          className="bg-card !text-primary ring-1 ring-primary/40"
+        >
+          {t.addProduct}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Step 3
+function HoursStep({
+  hours,
+  onChange,
+}: {
+  hours: DayHours[];
+  onChange: (h: DayHours[]) => void;
+}) {
+  const setDay = (i: number, patch: Partial<DayHours>) =>
+    onChange(hours.map((d, j) => (j === i ? { ...d, ...patch } : d)));
+
+  return (
+    <div className="flex flex-col gap-3">
+      {hours.map((d, i) => (
+        <div key={d.day_of_week} className="rounded-lg border border-border p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">{DAY_LABELS[i]}</span>
+            <Toggle
+              label={t.closed}
+              checked={d.is_closed}
+              onChange={(v) => setDay(i, { is_closed: v })}
+            />
+          </div>
+          {!d.is_closed && (
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <Field
+                name={`open-${i}`}
+                label={t.openTime}
+                type="time"
+                dir="ltr"
+                value={d.open_time ?? ""}
+                onChange={(e) => setDay(i, { open_time: e.target.value })}
+              />
+              <Field
+                name={`close-${i}`}
+                label={t.closeTime}
+                type="time"
+                dir="ltr"
+                value={d.close_time ?? ""}
+                onChange={(e) => setDay(i, { close_time: e.target.value })}
+              />
+            </div>
+          )}
+          <div className="mt-3">
+            <Field
+              name={`note-${i}`}
+              label={`${t.ramadanNote} (${t.optional})`}
+              value={d.note_ar ?? ""}
+              onChange={(e) => setDay(i, { note_ar: e.target.value || null })}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- Step 4
+function PoliciesStep({
+  policies,
+  onChange,
+}: {
+  policies: Record<string, string>;
+  onChange: (p: Record<string, string>) => void;
+}) {
+  const set = (key: string, value: string) =>
+    onChange({ ...policies, [key]: value });
+  return (
+    <div className="flex flex-col gap-4">
+      <Field
+        name="min_order_lbp"
+        label={`${t.minOrderLbp} (${t.optional})`}
+        type="number"
+        inputMode="numeric"
+        min={0}
+        value={policies.min_order_lbp}
+        onChange={(e) => set("min_order_lbp", e.target.value)}
+      />
+      <Field
+        name="delivery_fee_lbp"
+        label={`${t.deliveryFeeLbp} (${t.optional})`}
+        type="number"
+        inputMode="numeric"
+        min={0}
+        value={policies.delivery_fee_lbp}
+        onChange={(e) => set("delivery_fee_lbp", e.target.value)}
+      />
+      <Field
+        name="delivery_zones"
+        label={`${t.deliveryZones} (${t.optional})`}
+        value={policies.delivery_zones}
+        onChange={(e) => set("delivery_zones", e.target.value)}
+      />
+      <Field
+        name="payment_methods"
+        label={`${t.paymentMethods} (${t.optional})`}
+        value={policies.payment_methods}
+        onChange={(e) => set("payment_methods", e.target.value)}
+      />
+    </div>
+  );
+}
