@@ -24,6 +24,38 @@ export interface Me {
   setup_complete: boolean;
 }
 
+// ---- Orders feed (mirrors app/api/schemas/orders.py) ----
+
+export interface OrderItemRead {
+  id: string;
+  product_id: string;
+  name_ar_snapshot: string;
+  quantity: number;
+  unit_price_lbp: number | null;
+  unit_price_usd: string | null;
+  line_total_lbp: number | null;
+}
+
+export interface OrderRead {
+  id: string;
+  status: string; // "confirmed" in Phase 2
+  fulfillment_type: string; // "pickup" | "delivery"
+  requested_time_text: string | null;
+  total_lbp: number | null;
+  total_usd: string | null; // Decimal serialized as string
+  created_at: string;
+  customer_id: string;
+  customer_display_name: string | null;
+  items: OrderItemRead[];
+}
+
+export interface OrdersPage {
+  items: OrderRead[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 // ---- Profile / catalog (mirrors app/api/schemas/profile.py) ----
 
 // PUT /profile  (ProfileUpsert)

@@ -38,6 +38,18 @@ export const t = {
   setupIncompleteTitle: "محلك لسا مش جاهز",
   setupIncompleteBody: "كمّل ضبط محلك تتقبل طلبات الزباين.",
   setupIncompleteCta: "كمّل الضبط",
+  // Order feed
+  ordersToday: "طلبات اليوم",
+  noOrdersYet: "ما في طلبات اليوم بعد",
+  noOrdersHint: "أول ما يجي طلب رح يبيّن هون.",
+  ordersError: "ما قدرنا نجيب الطلبات.",
+  unknownCustomer: "زبون",
+  fulfillmentPickup: "استلام من المحل",
+  fulfillmentDelivery: "توصيل",
+  statusConfirmed: "مأكّد",
+  statusPreparing: "عم نحضّر",
+  statusDelivered: "تسلّم",
+  qtyTimes: "×", // "2 ×" before an item name
   // Generic actions
   next: "التالي",
   back: "رجوع",
@@ -113,3 +125,24 @@ export const DAY_LABELS = [
   t.daySat,
   t.daySun,
 ] as const;
+
+/** Fulfillment type → Arabic label. */
+export function fulfillmentLabel(type: string): string {
+  return type === "delivery" ? t.fulfillmentDelivery : t.fulfillmentPickup;
+}
+
+/**
+ * Order status → Arabic label + a Tailwind class pair. Color is paired with the
+ * text label (and a dot in the UI), never used alone (a11y color-not-only).
+ */
+export function statusMeta(status: string): { label: string; cls: string } {
+  switch (status) {
+    case "preparing":
+      return { label: t.statusPreparing, cls: "bg-status-pending/15 text-status-pending" };
+    case "delivered":
+      return { label: t.statusDelivered, cls: "bg-muted text-muted-foreground" };
+    case "confirmed":
+    default:
+      return { label: t.statusConfirmed, cls: "bg-accent/15 text-accent" };
+  }
+}
