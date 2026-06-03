@@ -34,6 +34,10 @@ export const t = {
   // Generic states
   retry: "جرّب مرة تانية",
   errorGeneric: "صار خطأ. جرّب مرة تانية.",
+  // Setup gating / banner
+  setupIncompleteTitle: "محلك لسا مش جاهز",
+  setupIncompleteBody: "كمّل ضبط محلك تتقبل طلبات الزباين.",
+  setupIncompleteCta: "كمّل الضبط",
   // Generic actions
   next: "التالي",
   back: "رجوع",
