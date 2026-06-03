@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     minio_access_key: SecretStr = Field(default=SecretStr("changeme"))
     minio_secret_key: SecretStr = Field(default=SecretStr("changeme"))
 
+    # Dashboard CORS — the React app (Phase 3) runs on a different origin, so the
+    # browser needs explicit cross-origin permission. A typed list, never "*"
+    # with credentials (that combination is a security hole the browser itself
+    # rejects). Default is the Vite dev server. Override in .env with a
+    # JSON array, e.g. CORS_ALLOW_ORIGINS=["https://app.modir.example"].
+    cors_allow_origins: list[str] = Field(
+        default=["http://localhost:5173", "http://127.0.0.1:5173"]
+    )
+
     # LLM provider keys — RESOLVED FROM VAULT, not env. Placeholder here.
     gemini_api_key: SecretStr = Field(default=SecretStr("from-vault"))
 
