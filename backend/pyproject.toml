@@ -22,6 +22,7 @@ dependencies = [
     "langchain-google-genai>=2.0.0",
     "langgraph>=0.2.0",
     "langsmith>=0.1.0",
+    "tzdata>=2026.2",
 ]
 
 [dependency-groups]
