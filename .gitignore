@@ -18,3 +18,7 @@ docs
 docker-compose.override.yml
 # Claude Code harness artifacts
 .claude/scheduled_tasks.lock
+# Locally-installed Claude Code skills (install per-machine, not tracked)
+.claude/skills/
+# Personal IDE settings
+.vscode/
