@@ -290,3 +290,37 @@ class OrderEvent(Base):
     )
     event: Mapped[str] = mapped_column(String(64), nullable=False)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class SignupRequest(Base):
+    """A prospective owner's application to join Modir (Phase 1.5, founder-gated
+    onboarding).
+
+    Deliberately NOT tenant-scoped: a pending request has no tenant until a
+    founder approves it. This table sits ABOVE the tenant boundary — by design,
+    not a hole in The Wall (constitution I). A request never reads or writes
+    tenant data; on approval the founder provisions a tenant via register_tenant
+    and records its id in `provisioned_tenant_id`. `created_at` (from Base) is the
+    requested-at time.
+
+    status: "pending" | "approved" | "rejected"
+    """
+
+    __tablename__ = "signup_requests"
+
+    business_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    owner_phone: Mapped[str] = mapped_column(String(32), nullable=False)
+    owner_email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
+    # Who reviewed it (a founder admin id; the admins-table FK is added in 3.14)
+    # and when, plus the rejection reason when status="rejected".
+    reviewed_by: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Payment is handled out-of-band for now (Phase 1.5); the founder may stamp
+    # this when they confirm payment before approving.
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The tenant created when this request was approved (null until then).
+    provisioned_tenant_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True
+    )
