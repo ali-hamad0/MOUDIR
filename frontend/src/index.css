@@ -1,0 +1,63 @@
+/* Self-hosted fonts (no external CDN; works offline, deploys in the container).
+   Cairo = Arabic UI; Inter = Latin + tabular numbers. font-display: swap is the
+   @fontsource default, so text is never invisible while the font loads. */
+@import "@fontsource/cairo/400.css";
+@import "@fontsource/cairo/600.css";
+@import "@fontsource/cairo/700.css";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens (light mode) — grounded via the ui-ux-pro-max skill: a
+   trustworthy SaaS-business palette for non-technical SME owners. Components
+   reference these through Tailwind semantic names, never raw hex. */
+:root {
+  --color-primary: #2563eb; /* trust blue */
+  --color-on-primary: #ffffff;
+  --color-accent: #059669; /* emerald — confirmed / positive */
+  --color-on-accent: #ffffff;
+  --color-background: #f8fafc;
+  --color-foreground: #1e293b;
+  --color-card: #ffffff;
+  --color-muted: #e9eff8;
+  --color-muted-foreground: #64748b;
+  --color-border: #e2e8f0;
+  --color-destructive: #dc2626; /* reject / unavailable / error */
+  --color-amber: #d97706; /* pending status */
+}
+
+html {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  /* Min 16px base so mobile browsers don't auto-zoom inputs. */
+  font-size: 16px;
+}
+
+body {
+  margin: 0;
+  font-family: "Cairo", "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh; /* dvh, not vh — correct on mobile address-bar resize */
+}
+
+/* Money/quantities: tabular figures so numeric columns don't jitter. */
+.tabular {
+  font-family: "Inter", "Cairo", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Respect the user's reduced-motion preference (a11y). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
