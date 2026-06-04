@@ -114,14 +114,21 @@ jobs:
           #    tenant-scoped query builder, never a hand-written text() string.
           ! grep -rn "text(" backend/app/repositories/ \
             || (echo "Raw text() SQL in repositories bypasses tenant scoping"; exit 1)
-          # 2) Every repository class must extend TenantScopedRepository, except
-          #    TenantRepository (the documented root — Tenant has no tenant_id).
+          # 2) Every repository class must extend TenantScopedRepository, EXCEPT
+          #    the documented "above-the-Wall" roots — identities/records that sit
+          #    above the tenant boundary and therefore have no tenant_id to scope:
+          #      - TenantRepository       (the tenant itself — the root)
+          #      - AdminRepository        (the founder/super-admin, above all tenants)
+          #      - SignupRequestRepository(a pending application, no tenant yet)
+          #    These are intentionally not tenant-scoped (constitution I): they are
+          #    never a path into tenant-owned data. Any OTHER repository must extend
+          #    the tenant-scoped base.
           offenders=$(grep -rn "^class .*Repository" backend/app/repositories/ \
             | grep -v "TenantScopedRepository" \
             | grep -v "class TenantScopedRepository" \
-            | grep -v "class TenantRepository:") || true
+            | grep -vE "class (TenantRepository|AdminRepository|SignupRequestRepository):") || true
           if [ -n "$offenders" ]; then
-            echo "Repository not extending TenantScopedRepository (and not the root TenantRepository):"
+            echo "Repository not extending TenantScopedRepository (and not a documented above-the-Wall root):"
             echo "$offenders"
             exit 1
           fi
