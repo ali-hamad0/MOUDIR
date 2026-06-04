@@ -12,6 +12,7 @@ from app.api import (
     admin,
     auth,
     customers,
+    inventory,
     me,
     orders,
     owners,
@@ -121,6 +122,7 @@ def create_app() -> FastAPI:
     app.include_router(owners.router)
     app.include_router(profile.router)
     app.include_router(orders.router)
+    app.include_router(inventory.router)
     app.include_router(customers.router)
     app.include_router(me.router)
     app.include_router(webhooks.router)
