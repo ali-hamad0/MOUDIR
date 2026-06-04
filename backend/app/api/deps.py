@@ -7,11 +7,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.webhook import WhatsAppWebhookPayload
-from app.db.models import Tenant, User
+from app.db.models import Admin, Tenant, User
 from app.db.session import get_db_session
 from app.domain.identity import ResolvedIdentity
 from app.infra.security import decode_access_token
 from app.infra.settings import Settings, get_settings
+from app.repositories.admins import AdminRepository
 from app.repositories.tenants import TenantRepository
 from app.repositories.users import UserRepository
 from app.services.identity_resolver import IdentityResolver
@@ -29,6 +30,11 @@ async def get_current_user(
     except jwt.PyJWTError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token") from None
 
+    # Reject anything that isn't a tenant-user access token — a founder "admin"
+    # token must NEVER satisfy a tenant-user dependency (audience separation).
+    if payload.get("type") != "access":
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Wrong token type")
+
     user_id = UUID(payload["sub"])
     tenant_id = UUID(payload["tenant_id"])
 
@@ -38,6 +44,32 @@ async def get_current_user(
     if user is None or user.tenant_id != tenant_id:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User not found for tenant")
     return user
+
+
+async def get_current_admin(
+    creds: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> Admin:
+    """Authorize the founder/super-admin for admin-only endpoints.
+
+    Requires an "admin"-type token (a tenant-user "access" token is rejected).
+    This dependency is the ONLY way an admin is authorized, and it is wired ONLY
+    into dedicated admin routes — never into a tenant-scoped repository. The Wall
+    holds: the founder cannot read tenant data through this path.
+    """
+    try:
+        payload = decode_access_token(settings, creds.credentials)
+    except jwt.PyJWTError:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired token") from None
+
+    if payload.get("type") != "admin":
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Wrong token type")
+
+    admin = await AdminRepository(db).get_by_id(UUID(payload["sub"]))
+    if admin is None or not admin.is_active:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Admin not found or inactive")
+    return admin
 
 
 async def get_current_tenant(
