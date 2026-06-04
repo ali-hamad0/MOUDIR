@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.agents.inventory.agent import InventoryAgent
 from app.agents.llm.router import GeminiRouter
 from app.agents.order.agent import OrderAgent
 from app.api import (
@@ -76,6 +77,10 @@ async def lifespan(app: FastAPI):
     )
     app.state.llm_router = GeminiRouter(settings)
     app.state.order_agent = OrderAgent(app.state.llm_router, settings, sessionmaker)
+    # The InventoryAgent mirrors the OrderAgent: built once, opens its own session
+    # per call. Task 4.9 reaches it via app.state.inventory_agent to draft a reorder
+    # PO inline when order completion drops stock below threshold.
+    app.state.inventory_agent = InventoryAgent(app.state.llm_router, settings, sessionmaker)
     app.state.dispatcher = MessageDispatcher(app.state.order_agent, sessionmaker)
     log.info("modir.agents.ready", langsmith=settings.langsmith_tracing)
 
