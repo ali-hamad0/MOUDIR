@@ -375,6 +375,92 @@ class Supplier(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
+# ── Phase 4 — Purchase Orders & HIL artifact ────────────────────────────────
+
+
+class PurchaseOrder(Base):
+    """A drafted/approved/sent reorder — the Human-in-the-Loop artifact.
+
+    The Wall (constitution I): non-nullable, indexed tenant_id; every repository
+    method filters by it. References the single `products` table and a tenant's own
+    `suppliers` row — both sides tenant-scoped, never across the Wall.
+
+    Status lifecycle (single source of truth for the gate + UI)::
+
+        draft ──approve──► approved ──dispatch(signed token)──► sent
+          │                  │                                   ▲
+          │                  └─dispatch fails after retries──► dispatch_failed
+          │                                                        │ manual "mark sent"
+          │                                                        ▼
+          └──reject──► rejected                                  (sent)
+
+    - draft           — the agent proposed it; awaiting a human. NEVER dispatched.
+    - approved        — a human approved; a signed token now exists; dispatch queued.
+    - sent            — the dispatcher confirmed delivery (webhook 2xx / dev log).
+    - dispatch_failed — the retry budget is exhausted; sits in the manual queue.
+    - rejected        — a human declined; carries reject_reason. Provisions nothing.
+
+    ⚠️ `status` is the lifecycle MARKER for the UI — it is NOT the security gate.
+    The gate is the signed approval token verified by ActionGate (Task 4.10):
+    `status == "approved"` is necessary but NOT sufficient to dispatch. A bug that
+    flips this status must still not produce a send without a valid token
+    (constitution V, the literal reading the owner asked for).
+    """
+
+    __tablename__ = "purchase_orders"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    # Where the reorder goes. Nullable: a draft may exist before the owner has set
+    # a supplier on the product's inventory row.
+    supplier_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=True
+    )
+    product_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("products.id"), nullable=False, index=True
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
+    # Why the agent drafted it (e.g. "crossed reorder threshold: 4 <= 5").
+    draft_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The Tier-1 LLM-drafted supplier note, in Lebanese Arabic (Task 4.8).
+    agent_note_ar: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The approver/rejecter — a user of THIS tenant. Null until reviewed.
+    reviewed_by: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Required on reject (enforced in the service/API, Task 4.7/4.12).
+    reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Dispatch bookkeeping (Task 4.11): how many sends were attempted, when it
+    # finally went out, and the last error if it failed.
+    dispatch_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    dispatched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dispatch_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class PurchaseOrderEvent(Base):
+    """Lightweight per-PO trail (drafted, approved, rejected, sent, ...).
+
+    Mirrors OrderEvent: the cross-cutting audit_log records tenant-level events via
+    AuditService; this table keeps PO-specific breadcrumbs close to the PO. The
+    purchase_order_id is nullable for the same reason OrderEvent.order_id is —
+    a breadcrumb can outlive its row.
+    """
+
+    __tablename__ = "purchase_order_events"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    purchase_order_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("purchase_orders.id"), nullable=True, index=True
+    )
+    event: Mapped[str] = mapped_column(String(64), nullable=False)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class Admin(Base):
     """The Modir founder / super-admin — an identity that sits ABOVE all tenants.
 
