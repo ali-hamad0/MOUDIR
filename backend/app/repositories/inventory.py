@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import Row, select, update
+from sqlalchemy import Row, func, select, update
 
 from app.db.models import Inventory, Product
 from app.repositories.base import TenantScopedRepository
@@ -57,6 +57,12 @@ class InventoryRepository(TenantScopedRepository[Inventory]):
             Inventory.quantity <= Inventory.reorder_threshold,
         )
         return (await self._session.execute(stmt)).scalars().all()
+
+    async def count(self, tenant_id: UUID) -> int:
+        """How many inventory rows this tenant has — the page total for the
+        dashboard view, computed in the same tenant scope as the listing."""
+        stmt = select(func.count()).select_from(Inventory).where(Inventory.tenant_id == tenant_id)
+        return int((await self._session.execute(stmt)).scalar_one())
 
     async def list_with_product(
         self, tenant_id: UUID, *, limit: int, offset: int
