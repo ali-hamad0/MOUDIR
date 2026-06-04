@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     jwt_expiry_minutes: int = Field(default=15)
     # Refresh tokens are documented but not implemented in Phase 1 (see DoD).
     jwt_refresh_expiry_minutes: int = Field(default=60 * 24 * 7)
+    # Signed approval tokens (the HIL execution gate, Phase 4 — ActionGate).
+    # A human's approval is time-boxed: a minted approval token authorizes its
+    # one action until this TTL elapses, so a leaked or stale approval cannot be
+    # replayed indefinitely. Reuses jwt_secret — no new secret to seed in Vault.
+    approval_token_ttl_minutes: int = Field(default=30)
 
     # Email (founder onboarding, Phase 1.5). Non-secret config here; the provider
     # API key is RESOLVED FROM VAULT. mail_mode "dev" sends to MailHog over SMTP
