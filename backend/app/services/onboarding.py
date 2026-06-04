@@ -96,7 +96,9 @@ async def approve_request(
         await mailer.send(
             to=req.owner_email,
             subject=activation_ar.ACTIVATION_EMAIL_SUBJECT,
-            body=activation_ar.ACTIVATION_EMAIL_BODY.format(link=link),
+            body=activation_ar.ACTIVATION_EMAIL_BODY.format(
+                link=link, whatsapp_number=whatsapp_number
+            ),
         )
     except Exception as e:  # noqa: BLE001 — mail is best-effort; log and move on
         log.warning("activation_email.failed", request_id=str(req.id), error=str(e))

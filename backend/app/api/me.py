@@ -43,6 +43,7 @@ async def whoami(user: CurrentUser, db: Db) -> MeResponse:
         role=user.role,
         tenant_id=tenant_id,
         business_name=business_name,
+        whatsapp_number=tenant.whatsapp_number,
         plan_tier=tenant.plan_tier,
         product_count=product_count,
         setup_complete=setup_complete,

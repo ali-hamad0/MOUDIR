@@ -18,6 +18,9 @@ class MeResponse(BaseModel):
     role: str
     tenant_id: UUID
     business_name: str | None = None
+    # The shop's WhatsApp AI number (assigned by the founder) — shown in the
+    # dashboard so the owner always knows which number their customers message.
+    whatsapp_number: str
     plan_tier: str
     product_count: int
     setup_complete: bool

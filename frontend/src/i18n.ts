@@ -42,6 +42,7 @@ export const t = {
   shop: "المحل",
   plan: "الباقة",
   productCount: "عدد المنتجات",
+  whatsappNumberLabel: "رقم واتساب المحل",
   // Plan tiers (display)
   planFree: "مجاني",
   planPro: "مدفوع",
