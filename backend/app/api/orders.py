@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -72,7 +72,7 @@ async def orders_today(
 
 
 @router.post("/orders/{order_id}/complete", response_model=OrderRead)
-async def complete_order(order_id: UUID, user: CurrentUser, db: Db) -> OrderRead:
+async def complete_order(order_id: UUID, request: Request, user: CurrentUser, db: Db) -> OrderRead:
     """Mark a confirmed order as completed, deducting every tracked line from
     inventory in one atomic transaction.
 
@@ -81,12 +81,17 @@ async def complete_order(order_id: UUID, user: CurrentUser, db: Db) -> OrderRead
     this tenant's; 409 if it isn't `confirmed` (e.g. already completed) or if any
     line is short on stock (the whole completion rolls back — no partial
     deduction). tenant_id comes from the JWT, never the path/body.
+
+    After the completion commits, any product the deduction pushed at/below its
+    reorder threshold gets a draft reorder PO from the InventoryAgent (Task 4.9),
+    unless one is already open. The agent is the single lifespan-built instance on
+    app.state, reached the same way the message dispatcher reaches the OrderAgent.
     """
     tenant_id = user.tenant_id
     try:
-        order = await OrderCompletionService(db).complete(
-            tenant_id=tenant_id, order_id=order_id, actor_id=user.id
-        )
+        order = await OrderCompletionService(
+            db, inventory_agent=request.app.state.inventory_agent
+        ).complete(tenant_id=tenant_id, order_id=order_id, actor_id=user.id)
     except OrderNotFound:
         raise HTTPException(status.HTTP_404_NOT_FOUND, inventory_ar.ORDER_NOT_FOUND) from None
     except OrderNotCompletable:
