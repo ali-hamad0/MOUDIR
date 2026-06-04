@@ -1,3 +1,4 @@
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,7 +8,11 @@ from app.domain.errors import InsufficientStock
 from app.infra.logging import get_logger
 from app.repositories.inventory import InventoryRepository
 from app.repositories.orders import OrderItemRepository, OrderRepository
+from app.repositories.purchase_orders import PurchaseOrderRepository
 from app.services.audit import AuditService
+
+if TYPE_CHECKING:
+    from app.agents.inventory.agent import InventoryAgent
 
 log = get_logger(__name__)
 
@@ -54,12 +59,19 @@ class OrderCompletionService:
     line is skipped and logged, never blocking fulfillment.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self, session: AsyncSession, inventory_agent: "InventoryAgent | None" = None
+    ) -> None:
         self._session = session
         self._orders = OrderRepository(session)
         self._items = OrderItemRepository(session)
         self._inventory = InventoryRepository(session)
+        self._purchase_orders = PurchaseOrderRepository(session)
         self._audit = AuditService(session)
+        # The InventoryAgent that drafts reorder POs (Task 4.9). Injected from
+        # app.state (built once in lifespan); None in unit tests that exercise
+        # deduction alone, where the post-commit drafting hook is simply skipped.
+        self._inventory_agent = inventory_agent
 
     async def complete(self, *, tenant_id: UUID, order_id: UUID, actor_id: UUID) -> Order:
         """Complete a confirmed order, deducting stock atomically.
@@ -122,15 +134,59 @@ class OrderCompletionService:
         )
         await self._session.commit()
 
-        # ── HOOK (Task 4.9): low-stock reorder PO drafting ──────────────────
-        # After this commit, any product now at/below its reorder threshold with
-        # no open PO should get a draft PO from the InventoryAgent. This runs
-        # AFTER commit on purpose — a draft hiccup must never roll back a real
-        # fulfillment, and the order is already `completed` at this point. Task
-        # 4.9 wires `inventory_agent.draft_for_low_stock(...)` here (idempotent on
-        # an existing open PO). Intentionally a no-op until then.
+        # ── Low-stock reorder PO drafting (Task 4.9) ────────────────────────
+        # After the completion COMMIT, draft a reorder PO for any product the
+        # deduction pushed at/below its threshold. This runs after commit on
+        # purpose: the order is already `completed`, so a drafting hiccup must
+        # never roll back a real fulfillment (a missed draft is recoverable — the
+        # threshold trips again on the next completion).
+        await self._draft_low_stock_reorders(tenant_id)
 
         return order
+
+    async def _draft_low_stock_reorders(self, tenant_id: UUID) -> None:
+        """For each product now at/below its reorder threshold, draft a reorder PO
+        — unless one is already open (idempotent, no approval spam).
+
+        Reads the freshly committed levels via `list_low_stock`, then for each
+        candidate that has no open (draft/approved-unsent) PO asks the
+        InventoryAgent to draft one. The agent opens and commits its OWN session,
+        so a draft is its own unit of work, decoupled from the completion txn.
+
+        This is best-effort: any failure (a low-stock read, an agent draft) is
+        logged and swallowed — the order completion already succeeded and a missed
+        draft is recoverable. No exception here ever propagates to the caller.
+        """
+        if self._inventory_agent is None:
+            return
+        try:
+            low = await self._inventory.list_low_stock(tenant_id)
+        except Exception:
+            log.exception("order_completion.low_stock_read_failed", tenant_id=str(tenant_id))
+            return
+
+        for row in low:
+            try:
+                if await self._purchase_orders.has_open_po_for_product(tenant_id, row.product_id):
+                    # Already an open PO for this product — don't re-draft (the
+                    # owner would get a duplicate approval). Idempotent on open PO.
+                    continue
+                po_id = await self._inventory_agent.draft_for_low_stock(tenant_id, row.product_id)
+                if po_id is not None:
+                    log.info(
+                        "order_completion.po_drafted",
+                        tenant_id=str(tenant_id),
+                        product_id=str(row.product_id),
+                        purchase_order_id=str(po_id),
+                    )
+            except Exception:
+                # One product's drafting failing must not stop the others, and
+                # never surfaces to the (already-successful) completion call.
+                log.exception(
+                    "order_completion.draft_failed",
+                    tenant_id=str(tenant_id),
+                    product_id=str(row.product_id),
+                )
 
     async def _items_for_order(self, tenant_id: UUID, order_id: UUID):
         """Every line of one order, tenant-scoped. Reuses the batched
