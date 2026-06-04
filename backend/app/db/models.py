@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Integer,
@@ -300,6 +301,78 @@ class OrderEvent(Base):
     )
     event: Mapped[str] = mapped_column(String(64), nullable=False)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+# ── Phase 4 — Inventory & Suppliers ─────────────────────────────────────────
+
+
+class Inventory(Base):
+    """Live stock level for one product, one row per (tenant_id, product_id).
+
+    The Wall (constitution I): tenant-scoped — a non-nullable, indexed tenant_id,
+    and every repository method filters by it. The inventory-deduction JOIN
+    (order_items → products → inventory) is scoped on every side.
+
+    This REFERENCES the single `products` table (a nullable FK is wrong here —
+    inventory exists only for a real product). It does NOT copy the catalog into a
+    per-phase "inventory_products" table (ROADMAP pitfall; constitution: one
+    catalog table). Inventory is the moving quantity; the product is its identity,
+    price, and name — kept in the one place they already live.
+
+    `quantity` carries a DB-level CHECK (>= 0): the schema itself refuses an
+    oversell. Combined with the guarded UPDATE in the repository (Task 4.2), two
+    concurrent orders for the last unit can never both succeed and the level can
+    never go negative.
+    """
+
+    __tablename__ = "inventory"
+    __table_args__ = (
+        # One live-stock row per product per tenant.
+        UniqueConstraint("tenant_id", "product_id", name="uq_inventory_tenant_product"),
+        # Schema-level backstop against oversell — the database itself rejects a
+        # negative quantity even if application code is wrong (ROADMAP pitfall).
+        CheckConstraint("quantity >= 0", name="ck_inventory_qty_nonneg"),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    product_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("products.id"), nullable=False, index=True
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Low-stock trip point. Null = untracked threshold (never trips a reorder).
+    reorder_threshold: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Default quantity to reorder when the threshold trips (the agent may override).
+    reorder_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Who a reorder for this product goes to. Null until the owner sets it.
+    supplier_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=True
+    )
+
+
+class Supplier(Base):
+    """Where a reorder is dispatched to, scoped to a tenant.
+
+    The Wall (constitution I): non-nullable, indexed tenant_id; every repository
+    method filters by it. Tenant A's inventory can never reference tenant B's
+    supplier — both sides are tenant-scoped.
+
+    dispatch_type is `webhook` for now (Phase 4): a PO for this supplier is POSTed
+    to `webhook_url` via the SupplierDispatcher (Task 4.11). `contact_email` is an
+    optional fallback channel.
+    """
+
+    __tablename__ = "suppliers"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    dispatch_type: Mapped[str] = mapped_column(String(16), nullable=False, default="webhook")
+    webhook_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    contact_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
 class Admin(Base):
