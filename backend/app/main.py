@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.agents.llm.router import GeminiRouter
 from app.agents.order.agent import OrderAgent
 from app.api import (
+    activation,
     admin,
     auth,
     customers,
@@ -116,6 +117,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(admin.router)
     app.include_router(signup_requests.router)
+    app.include_router(activation.router)
     app.include_router(owners.router)
     app.include_router(profile.router)
     app.include_router(orders.router)
