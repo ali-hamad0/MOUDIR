@@ -88,6 +88,16 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(32), nullable=False, default="owner")
+    # Founder-onboarding activation (Phase 1.5). When a founder approves a signup
+    # request, the user is created WITHOUT a usable password and with a one-time,
+    # expiring activation_token; the owner sets their own password via /activate,
+    # which stamps activated_at and clears the token. A user with activated_at is
+    # NULL (and only a placeholder password) cannot log in.
+    activation_token: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    activation_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Customer(Base):

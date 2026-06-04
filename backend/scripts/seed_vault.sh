@@ -11,6 +11,7 @@ vault kv put secret/modir/llm \
   langsmith_api_key="dev-langsmith-key-rotate-before-prod"
 vault kv put secret/modir/minio access_key="modir-access" secret_key="modir-secret-changeme"
 vault kv put secret/modir/auth jwt_secret="dev-jwt-secret-rotate-before-prod"
+vault kv put secret/modir/mail api_key="dev-mail-key-rotate-before-prod"
 
 echo "Vault seeded with placeholder secrets."
 echo "Replace placeholders before production!"
