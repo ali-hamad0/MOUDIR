@@ -909,34 +909,39 @@ provider SDK stays in app/agents/llm/. A regression fails the build.
 
 ## Phase 3 — Definition of Done
 
-Run through this before marking Phase 3 complete (mirrors the ROADMAP DoD + 1.5 DoD):
+✅ **COMPLETE** — verified 2026-06-04, all PRs merged to `main` (through PR #67).
+Defend-it write-up at `docs/PHASE_3_DEFEND_IT.md`.
 
 **Dashboard (Part A):**
-- [ ] Abu Khaled signs in for the first time → the setup wizard launches automatically.
-- [ ] He adds ≥5 products (Arabic names, LBP prices, availability toggles) → they appear in the catalog API.
-- [ ] He sets operating hours including a "closed on Sundays" rule and a Ramadan note.
-- [ ] After wizard completion, `knowledge_base_docs` has one `pending` row per product, policy, and hours record.
-- [ ] A customer order for one of those products goes through Phase 2's OrderAgent correctly.
-- [ ] The order appears in the live dashboard within ~10 seconds (5s polling).
-- [ ] The customer list shows all customers for this tenant — and only this tenant.
-- [ ] Money displays in both LBP (primary) and USD (muted) with consistent Arabic number formatting.
-- [ ] The UI works on a 360px-wide screen, RTL, in the Arabic font (no Latin-fallback boxes, no horizontal scroll).
-- [ ] The frontend deploys separately — its own Dockerfile and dependencies; CORS lets the browser reach the API.
+- [x] Abu Khaled signs in for the first time → the setup wizard launches automatically.
+- [x] He adds ≥5 products (Arabic names, LBP prices, availability toggles) → they appear in the catalog API.
+- [x] He sets operating hours including a "closed on Sundays" rule and a Ramadan note.
+- [x] After wizard completion, `knowledge_base_docs` has one `pending` row per product, policy, and hours record. *(verified live: 5 product / 3 policy / 7 hours pending rows)*
+- [x] A customer order for one of those products goes through Phase 2's OrderAgent correctly. *(verified live against real Gemini)*
+- [x] The order appears in the live dashboard within ~10 seconds (5s polling).
+- [x] The customer list shows all customers for this tenant — and only this tenant.
+- [x] Money displays in both LBP (primary) and USD (muted) with consistent Arabic number formatting.
+- [x] The UI works on a 360px-wide screen, RTL, in the Arabic font (no Latin-fallback boxes, no horizontal scroll).
+- [x] The frontend deploys separately — its own Dockerfile and dependencies; CORS lets the browser reach the API.
 
 **Founder-gated onboarding (Part B / Phase 1.5):**
-- [ ] A business owner CANNOT log in without a founder-approved, activated account.
-- [ ] Public signup creates a `pending` request only — no tenant, no user, no login.
-- [ ] The founder can list, approve, and reject requests from the dashboard; each is audit-logged.
-- [ ] Approval provisions the tenant (via `register_tenant`) and emails a one-time activation link. No plaintext password is ever sent.
-- [ ] The activation link is single-use and expires; a used/expired link is rejected.
-- [ ] After activation the owner sets their own password and can log in.
-- [ ] The founder-admin identity is separate from tenant `users` and CANNOT read/write tenant data through normal repositories — a test proves a founder cannot cross-tenant leak.
-- [ ] Email credentials resolve from Vault; dev mode does not send real email (MailHog/log).
-- [ ] `/auth/register` is founder-only; the public path is `/signup-requests`.
+- [x] A business owner CANNOT log in without a founder-approved, activated account.
+- [x] Public signup creates a `pending` request only — no tenant, no user, no login.
+- [x] The founder can list, approve, and reject requests from the dashboard; each is audit-logged.
+- [x] Approval provisions the tenant (via `register_tenant`) and emails a one-time activation link. No plaintext password is ever sent.
+- [x] The activation link is single-use and expires; a used/expired link is rejected.
+- [x] After activation the owner sets their own password and can log in.
+- [x] The founder-admin identity is separate from tenant `users` and CANNOT read/write tenant data through normal repositories — a test proves a founder cannot cross-tenant leak. *(`test_onboarding.py::test_founder_cannot_cross_the_wall`)*
+- [x] Email credentials resolve from Vault; dev mode does not send real email (MailHog/log).
+- [x] `/auth/register` is founder-only; the public path is `/signup-requests`.
 
 **Cross-cutting:**
-- [ ] `grep -rn "os.getenv\|print(\|import requests" backend/app/` still returns nothing; provider SDK only under `app/agents/llm/`.
-- [ ] CI is green on `main`: backend (migrations + full pytest, LLM mocked) AND the new frontend job (lint, typecheck, build).
+- [x] `grep -rn "os.getenv\|print(\|import requests" backend/app/` still returns nothing; provider SDK only under `app/agents/llm/`.
+- [x] CI is green on `main`: backend (migrations + full pytest, LLM mocked, 87 tests) AND the new frontend job (lint, typecheck, build).
+
+**Beyond the original plan (folded in during build):**
+- [x] Public `/signup` UI page (owner submits: business name, personal phone, email — no WhatsApp number).
+- [x] The founder assigns the shop's WhatsApp AI number at approval (required); it is surfaced to the owner in the activation email and the dashboard whoami panel (`/me`). *(Each shop has its OWN WhatsApp number — the `to` number identifies the tenant. See `whatsapp-number-ownership-decision`; firm Phase 10 integration TBD.)*
 
 ## Phase 3 — Defend-it Preparation
 
