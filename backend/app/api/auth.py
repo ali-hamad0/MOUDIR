@@ -3,7 +3,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_admin
 from app.api.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+from app.db.models import Admin
 from app.db.session import get_db_session
 from app.infra.security import create_access_token, verify_password
 from app.infra.settings import Settings, get_settings
@@ -21,10 +23,15 @@ async def register(
     payload: RegisterRequest,
     db: Annotated[AsyncSession, Depends(get_db_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    _admin: Annotated[Admin, Depends(get_current_admin)],
 ) -> TokenResponse:
-    """Provision a new shop (tenant + first owner + dashboard user + blank
-    profile) and return an access token for the new user. Duplicate
-    whatsapp_number → 409."""
+    """Provision a new shop directly — FOUNDER ONLY now (Phase 1.5).
+
+    Self-service signup is gone: the public path is POST /signup-requests →
+    founder approval. This route is kept so the founder can provision a tenant
+    directly (it requires an admin token); it still returns a token for the new
+    user. Duplicate whatsapp_number → 409.
+    """
     result = await register_tenant(db, payload)
     token = create_access_token(settings, user_id=result.user.id, tenant_id=result.tenant.id)
     return TokenResponse(access_token=token, expires_in_minutes=settings.jwt_expiry_minutes)
