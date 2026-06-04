@@ -75,27 +75,42 @@ class OrderCompletionService:
         if order.status != "confirmed":
             raise OrderNotCompletable(order_id, order.status)
 
-        # One transaction: deduct every tracked line, then flip status + audit.
+        # Deduct every tracked line, then flip status + audit — all atomic.
         # items_for_orders is already tenant-scoped (the Wall) and batched.
+        #
+        # The deduction loop runs inside a SAVEPOINT (begin_nested). A short line
+        # raises InsufficientStock, which unwinds the savepoint and undoes EVERY
+        # prior deduct in this completion — no partial deduction ever lands. A
+        # savepoint (not a full session.rollback) is deliberate: it discards only
+        # this completion's writes, never anything the caller already did in the
+        # same session. The line's status flip + audit + commit happen after the
+        # savepoint succeeds.
         items = await self._items_for_order(tenant_id, order_id)
-        for item in items:
-            row = await self._inventory.get_by_product(tenant_id, item.product_id)
-            if row is None:
-                # Untracked product (no inventory row) -> skip, don't block.
-                # The owner may not track this SKU yet; fulfillment proceeds.
-                log.info(
-                    "order_completion.untracked_line",
-                    tenant_id=str(tenant_id),
-                    order_id=str(order_id),
-                    product_id=str(item.product_id),
-                )
-                continue
-            deducted = await self._inventory.deduct(tenant_id, item.product_id, item.quantity)
-            if not deducted:
-                # Short line: the guarded UPDATE matched nothing. Raising here
-                # rolls back every prior deduct in this transaction — no partial
-                # deduction ever lands. The API maps this to a 409.
-                raise InsufficientStock(item.product_id)
+        savepoint = await self._session.begin_nested()
+        try:
+            for item in items:
+                row = await self._inventory.get_by_product(tenant_id, item.product_id)
+                if row is None:
+                    # Untracked product (no inventory row) -> skip, don't block.
+                    # The owner may not track this SKU yet; fulfillment proceeds.
+                    log.info(
+                        "order_completion.untracked_line",
+                        tenant_id=str(tenant_id),
+                        order_id=str(order_id),
+                        product_id=str(item.product_id),
+                    )
+                    continue
+                deducted = await self._inventory.deduct(tenant_id, item.product_id, item.quantity)
+                if not deducted:
+                    # Short line: the guarded UPDATE matched nothing. Unwind the
+                    # savepoint so every prior deduct in this completion is undone
+                    # — no partial deduction lands — then surface the error. The
+                    # API maps InsufficientStock to a 409.
+                    raise InsufficientStock(item.product_id)
+        except InsufficientStock:
+            await savepoint.rollback()
+            raise
+        await savepoint.commit()
 
         order.status = "completed"
         self._session.add(OrderEvent(tenant_id=tenant_id, order_id=order_id, event="completed"))
