@@ -292,6 +292,24 @@ class OrderEvent(Base):
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class Admin(Base):
+    """The Modir founder / super-admin — an identity that sits ABOVE all tenants.
+
+    Deliberately separate from `users` (which are strictly tenant-bound): keeping
+    the founder out of `users` means every tenant-scoped query can assume its
+    user belongs to exactly one tenant, and there is no "null-tenant user" to
+    reason about. The founder is the ONE identity allowed to act across tenants,
+    and ONLY through dedicated, audited admin endpoints — never through a
+    tenant-scoped repository (constitution I). See get_current_admin.
+    """
+
+    __tablename__ = "admins"
+
+    email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
 class SignupRequest(Base):
     """A prospective owner's application to join Modir (Phase 1.5, founder-gated
     onboarding).
@@ -312,9 +330,10 @@ class SignupRequest(Base):
     owner_phone: Mapped[str] = mapped_column(String(32), nullable=False)
     owner_email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
-    # Who reviewed it (a founder admin id; the admins-table FK is added in 3.14)
-    # and when, plus the rejection reason when status="rejected".
-    reviewed_by: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    # Which founder reviewed it and when, plus the reason when status="rejected".
+    reviewed_by: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("admins.id"), nullable=True
+    )
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Payment is handled out-of-band for now (Phase 1.5); the founder may stamp
