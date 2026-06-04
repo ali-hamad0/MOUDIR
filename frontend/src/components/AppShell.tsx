@@ -66,7 +66,11 @@ export function AppShell() {
           ))}
         </nav>
 
-        <WhoamiPanel businessName={me?.business_name} planTier={me?.plan_tier} />
+        <WhoamiPanel
+          businessName={me?.business_name}
+          planTier={me?.plan_tier}
+          whatsappNumber={me?.whatsapp_number}
+        />
         <button
           onClick={logout}
           className="mt-3 flex min-h-[44px] items-center gap-3 rounded-lg px-3 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
@@ -128,9 +132,11 @@ export function AppShell() {
 function WhoamiPanel({
   businessName,
   planTier,
+  whatsappNumber,
 }: {
   businessName?: string | null;
   planTier?: string;
+  whatsappNumber?: string;
 }) {
   return (
     <div className="rounded-xl border border-border bg-background p-3 text-sm">
@@ -138,6 +144,14 @@ function WhoamiPanel({
       <p className="truncate font-semibold text-foreground">
         {businessName ?? "—"}
       </p>
+      {whatsappNumber && (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {t.whatsappNumberLabel}:{" "}
+          <span className="tabular" dir="ltr">
+            {whatsappNumber}
+          </span>
+        </p>
+      )}
       {planTier && (
         <p className="mt-1 text-xs text-muted-foreground">
           {t.plan}: <span className="tabular">{planLabel(planTier)}</span>

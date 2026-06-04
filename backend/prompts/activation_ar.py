@@ -6,10 +6,14 @@ reach the owner: the activation email and the set-password responses.
 
 # Activation email (sent after the founder approves a signup request).
 ACTIVATION_EMAIL_SUBJECT = "فعّل حسابك بمودير"
-# {link} is replaced with the one-time activation URL.
+# {link} = the one-time activation URL; {whatsapp_number} = the shop's WhatsApp AI
+# number that the founder assigned (so the owner knows which number to give customers).
 ACTIVATION_EMAIL_BODY = (
     "أهلين!\n\n"
-    "تمت الموافقة على محلك بمودير. إضغط هالرابط تحت تحط كلمة السر وتفعّل حسابك:\n\n"
+    "تمت الموافقة على محلك بمودير. 🎉\n\n"
+    "رقم واتساب محلك (يلي زباينك بيراسلوه ومودير بيرد عليه):\n"
+    "{whatsapp_number}\n\n"
+    "إضغط هالرابط تحت تحط كلمة السر وتفعّل حسابك:\n\n"
     "{link}\n\n"
     "الرابط بيشتغل مرة وحدة وبينتهي بعد فترة. إذا ما طلبت هالشي، تجاهل الإيميل.\n\n"
     "مودير"

@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/context";
@@ -122,6 +122,10 @@ export default function LoginPage() {
           <Button type="submit" loading={submitting}>
             {submitting ? t.loggingIn : t.loginButton}
           </Button>
+
+          <Link to="/signup" className="text-center text-sm text-primary">
+            {t.signupCta}
+          </Link>
         </form>
       </div>
     </main>

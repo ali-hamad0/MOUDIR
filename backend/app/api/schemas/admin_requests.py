@@ -21,8 +21,8 @@ class SignupRequestAdminView(BaseModel):
 
 
 class ApproveRequest(BaseModel):
-    """Approval needs the shop's WhatsApp number (the signup request didn't
-    capture it — the owner phone is separate from the business WA number)."""
+    """The founder provides the shop's WhatsApp AI number (set up in Meta before
+    approving). Required — a shop is never provisioned without its number."""
 
     whatsapp_number: str = Field(min_length=4, max_length=32)
 

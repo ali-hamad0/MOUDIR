@@ -39,7 +39,11 @@ async def approve_request(
     whatsapp_number: str,
 ) -> SignupRequest:
     """Approve a pending request: provision the tenant, issue a one-time
-    activation token, email the link, and mark the request approved."""
+    activation token, email the link, and mark the request approved.
+
+    The founder provides the shop's WhatsApp AI number (they set it up in Meta
+    before approving) — the owner does not supply it at signup.
+    """
     repo = SignupRequestRepository(db)
     req = await repo.get_by_id(request_id)
     if req is None:
@@ -92,7 +96,9 @@ async def approve_request(
         await mailer.send(
             to=req.owner_email,
             subject=activation_ar.ACTIVATION_EMAIL_SUBJECT,
-            body=activation_ar.ACTIVATION_EMAIL_BODY.format(link=link),
+            body=activation_ar.ACTIVATION_EMAIL_BODY.format(
+                link=link, whatsapp_number=whatsapp_number
+            ),
         )
     except Exception as e:  # noqa: BLE001 — mail is best-effort; log and move on
         log.warning("activation_email.failed", request_id=str(req.id), error=str(e))

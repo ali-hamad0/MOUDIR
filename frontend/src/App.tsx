@@ -11,6 +11,7 @@ import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import OrdersPage from "./pages/OrdersPage";
 import SetupWizard from "./pages/SetupWizard";
+import SignupPage from "./pages/SignupPage";
 
 export default function App() {
   return (
@@ -18,6 +19,8 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          {/* Public signup request (prospective owner applies — no account yet). */}
+          <Route path="/signup" element={<SignupPage />} />
           {/* Public activation (owner sets password from the email link). */}
           <Route path="/activate" element={<ActivatePage />} />
           {/* Founder admin area — separate identity, separate token. */}

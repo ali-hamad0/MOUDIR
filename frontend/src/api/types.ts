@@ -19,6 +19,7 @@ export interface Me {
   role: string;
   tenant_id: string;
   business_name: string | null;
+  whatsapp_number: string;
   plan_tier: string;
   product_count: number;
   setup_complete: boolean;
