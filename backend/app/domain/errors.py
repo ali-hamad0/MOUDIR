@@ -32,3 +32,18 @@ class ProductUnavailable(OrderError):
         self.product_id = product_id
         self.name_ar = name_ar
         super().__init__(f"product {product_id} ({name_ar}) is unavailable")
+
+
+class InsufficientStock(OrderError):
+    """A deduction asked for more units than the inventory row holds.
+
+    Raised when InventoryRepository.deduct returns False — the guarded UPDATE
+    (`quantity >= qty`) matched no row, so the completion transaction must roll
+    back rather than write a negative quantity (the DB CHECK would reject it
+    anyway). The order-completion service (Task 4.4) catches this and maps it to a
+    409; nothing is partially deducted.
+    """
+
+    def __init__(self, product_id: UUID) -> None:
+        self.product_id = product_id
+        super().__init__(f"insufficient stock for product {product_id}")
