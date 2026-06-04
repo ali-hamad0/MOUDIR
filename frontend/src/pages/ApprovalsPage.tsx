@@ -105,6 +105,8 @@ function RequestCard({
   onDone: () => void;
 }) {
   const [mode, setMode] = useState<"none" | "approve" | "reject">("none");
+  // The founder enters the shop's WhatsApp AI number (set up in Meta) before
+  // approving — required; the owner never supplied one at signup.
   const [wa, setWa] = useState("");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);

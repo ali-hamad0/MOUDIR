@@ -62,7 +62,10 @@ async def _admin(db: AsyncSession) -> Admin:
 
 async def _make_request(db: AsyncSession, *, email: str, phone="+96170REQ") -> SignupRequest:
     req = SignupRequest(
-        business_name="محل التجربة", owner_phone=phone, owner_email=email, status="pending"
+        business_name="محل التجربة",
+        owner_phone=phone,
+        owner_email=email,
+        status="pending",
     )
     return await SignupRequestRepository(db).add(req)
 
