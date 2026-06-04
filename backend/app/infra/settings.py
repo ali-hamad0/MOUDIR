@@ -60,6 +60,19 @@ class Settings(BaseSettings):
     # Refresh tokens are documented but not implemented in Phase 1 (see DoD).
     jwt_refresh_expiry_minutes: int = Field(default=60 * 24 * 7)
 
+    # Email (founder onboarding, Phase 1.5). Non-secret config here; the provider
+    # API key is RESOLVED FROM VAULT. mail_mode "dev" sends to MailHog over SMTP
+    # (or logs) and NEVER sends real mail; "api" would POST to a provider.
+    mail_mode: str = Field(default="dev")  # "dev" (MailHog/log) | "api" (provider)
+    mail_from: str = Field(default="Modir <no-reply@modir.local>")
+    mail_smtp_host: str = Field(default="mailhog")  # the MailHog service name
+    mail_smtp_port: int = Field(default=1025)
+    # Activation links point at the dashboard; the owner clicks to set a password.
+    activation_base_url: str = Field(default="http://localhost:5173/activate")
+    activation_ttl_minutes: int = Field(default=60 * 24)  # one-time link valid 24h
+    # Provider API key — RESOLVED FROM VAULT, not env. Placeholder here.
+    mail_api_key: SecretStr = Field(default=SecretStr("from-vault"))
+
     # Paths
     base_dir: Path = Field(default=Path(__file__).parent.parent.parent)
 

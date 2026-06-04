@@ -44,6 +44,7 @@ def resolve_secrets(settings):
         "minio_access_key": ("modir/minio", "access_key"),
         "minio_secret_key": ("modir/minio", "secret_key"),
         "jwt_secret": ("modir/auth", "jwt_secret"),
+        "mail_api_key": ("modir/mail", "api_key"),
     }
     for field, (path, key) in secrets_map.items():
         from pydantic import SecretStr

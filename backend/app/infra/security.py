@@ -1,3 +1,4 @@
+import secrets
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -11,6 +12,14 @@ _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def hash_password(plain: str) -> str:
     return _pwd_context.hash(plain)
+
+
+def generate_activation_token() -> str:
+    """A random, URL-safe one-time activation token (founder onboarding).
+
+    Stored on the user row with an expiry; single-use (cleared on activation).
+    """
+    return secrets.token_urlsafe(32)
 
 
 def verify_password(plain: str, hashed: str) -> bool:
