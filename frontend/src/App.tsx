@@ -6,6 +6,7 @@ import { AppShell } from "./components/AppShell";
 import ActivatePage from "./pages/ActivatePage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import ApprovalsPage from "./pages/ApprovalsPage";
+import BillsPage from "./pages/BillsPage";
 import CustomersPage from "./pages/CustomersPage";
 import DashboardPage from "./pages/DashboardPage";
 import InventoryPage from "./pages/InventoryPage";
@@ -40,6 +41,7 @@ export default function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
+            <Route path="/bills" element={<BillsPage />} />
             <Route path="/approvals" element={<ReordersPage />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/setup" element={<SetupWizard />} />

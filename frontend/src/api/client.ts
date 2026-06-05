@@ -74,9 +74,49 @@ async function request<T>(
   return (await res.json()) as T;
 }
 
+/**
+ * Multipart upload (e.g. a supplier-bill image). Sends FormData WITHOUT a
+ * Content-Type header so the browser sets the multipart boundary itself; the JWT
+ * + 401 handling are the same as `request`.
+ */
+async function upload<T>(path: string, form: FormData): Promise<T> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers,
+      body: form,
+    });
+  } catch {
+    throw new ApiError(0, "network");
+  }
+
+  if (res.status === 401) {
+    onUnauthorized();
+    throw new ApiError(401, "unauthorized");
+  }
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const data = await res.json();
+      if (typeof data?.detail === "string") detail = data.detail;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new ApiError(res.status, detail);
+  }
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body),
   del: <T>(path: string) => request<T>("DELETE", path),
+  upload: <T>(path: string, form: FormData) => upload<T>(path, form),
 };

@@ -177,6 +177,29 @@ export const t = {
   poMarkedSent: "تعلّم الطلب إنه مبعوت.",
   poActionError: "ما قدرنا نكمّل العملية. جرّب مرة تانية.",
   poRejectReasonRequired: "لازم تكتب سبب الرفض.",
+  // ---- Supplier bills (OCR) ----
+  navBills: "الفواتير",
+  billsTitle: "فواتير الموردين",
+  billsError: "ما قدرنا نجيب الفواتير.",
+  billsEmpty: "ما في فواتير. صوّر فاتورة مورّد لتبلّش.",
+  billUpload: "صوّر / ارفع فاتورة",
+  billUploading: "عم نرفع...",
+  billUploaded: "وصلت الفاتورة — عم نقراها.",
+  billUploadError: "ما قدرنا نرفع الفاتورة. جرّب مرة تانية.",
+  billUploadBadType: "بس صور مقبولة (JPG، PNG).",
+  billSupplier: "المورّد",
+  billNoSupplier: "مورّد غير معروف",
+  billTotal: "المجموع",
+  billDate: "التاريخ",
+  billConfidence: "الثقة",
+  // Bill status labels
+  billStatusUploaded: "عم نرفع",
+  billStatusProcessing: "عم نقرا الفاتورة",
+  billStatusExtracted: "بانتظار المراجعة",
+  billStatusCommitting: "عم نسجّل",
+  billStatusCommitted: "تسجّلت بالمخزون",
+  billStatusRejected: "مرفوضة",
+  billStatusFailed: "ما قدرنا نقراها",
   // Pagination
   prevPage: "السابق",
   nextPage: "التالي",
@@ -299,5 +322,30 @@ export function poStatusMeta(status: string): { label: string; cls: string } {
     case "draft":
     default:
       return { label: t.poStatusDraft, cls: "bg-status-pending/15 text-status-pending" };
+  }
+}
+
+/**
+ * Supplier-bill status → Arabic label + Tailwind class pair, for the bills list +
+ * review screen. Color is always paired with the text label (a11y color-not-only).
+ */
+export function billStatusMeta(status: string): { label: string; cls: string } {
+  switch (status) {
+    case "uploaded":
+      return { label: t.billStatusUploaded, cls: "bg-muted text-muted-foreground" };
+    case "ocr_processing":
+      return { label: t.billStatusProcessing, cls: "bg-muted text-muted-foreground" };
+    case "extracted":
+      return { label: t.billStatusExtracted, cls: "bg-status-pending/15 text-status-pending" };
+    case "committing":
+      return { label: t.billStatusCommitting, cls: "bg-accent/15 text-accent" };
+    case "committed":
+      return { label: t.billStatusCommitted, cls: "bg-accent/15 text-accent" };
+    case "rejected":
+      return { label: t.billStatusRejected, cls: "bg-destructive/10 text-destructive" };
+    case "ocr_failed":
+      return { label: t.billStatusFailed, cls: "bg-destructive/10 text-destructive" };
+    default:
+      return { label: status, cls: "bg-muted text-muted-foreground" };
   }
 }
