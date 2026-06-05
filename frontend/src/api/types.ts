@@ -127,6 +127,66 @@ export interface ApprovalsPage {
   offset: number;
 }
 
+// ---- Supplier bills (OCR) — mirrors app/api/schemas/bills.py ----
+
+// Numeric fields are serialized as strings (backend Decimal → JSON string).
+export interface BillRead {
+  id: string;
+  status: string;
+  supplier_id: string | null;
+  supplier_name: string | null;
+  original_filename: string | null;
+  bill_date: string | null;
+  total_amount: string | null;
+  currency: string | null;
+  min_confidence: string | null;
+  reject_reason: string | null;
+  reviewed_at: string | null;
+  committed_at: string | null;
+  created_at: string;
+}
+
+export interface BillsPage {
+  items: BillRead[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface BillUploadAccepted {
+  id: string;
+  status: string;
+}
+
+export interface BillLineRead {
+  id: string;
+  raw_text: string | null;
+  name_ar: string | null;
+  quantity: string | null;
+  unit: string | null;
+  unit_amount: string | null;
+  line_amount: string | null;
+  confidence: string | null;
+  product_id: string | null;
+  product_name_ar: string | null;
+  committed: boolean;
+}
+
+export interface BillDetail extends BillRead {
+  image_url: string | null;
+  lines: BillLineRead[];
+}
+
+export interface BillLineUpdate {
+  id: string;
+  name_ar?: string | null;
+  quantity?: string | null;
+  unit?: string | null;
+  unit_amount?: string | null;
+  line_amount?: string | null;
+  product_id?: string | null;
+}
+
 // ---- Customers list (mirrors app/api/schemas/customers.py) ----
 
 export interface CustomerRead {

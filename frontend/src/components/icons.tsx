@@ -97,6 +97,17 @@ export function ApprovalsIcon(props: IconProps) {
   );
 }
 
+// Supplier bills — a receipt/document with lines (OCR'd paper bill).
+export function BillsIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M6 3h12v18l-3-1.5L12 21l-3-1.5L6 21z" />
+      <path d="M9 8h6" />
+      <path d="M9 12h6" />
+    </svg>
+  );
+}
+
 export function LogoutIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
