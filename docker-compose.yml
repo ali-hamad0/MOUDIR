@@ -99,7 +99,8 @@ services:
         vault kv put secret/modir/llm gemini_api_key="placeholder-rotate-before-prod" langsmith_api_key="dev-langsmith-key-rotate-before-prod" &&
         vault kv put secret/modir/minio access_key="modir-access" secret_key="modir-secret-changeme" &&
         vault kv put secret/modir/auth jwt_secret="dev-jwt-secret-rotate-before-prod" &&
-        vault kv put secret/modir/mail api_key="dev-mail-key-rotate-before-prod"
+        vault kv put secret/modir/mail api_key="dev-mail-key-rotate-before-prod" &&
+        vault kv put secret/modir/ocr service_account_json="{}"
 
   migrate:
     build:

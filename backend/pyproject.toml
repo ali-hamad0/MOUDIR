@@ -25,6 +25,7 @@ dependencies = [
     "tzdata>=2026.2",
     "aiosmtplib>=5.1.1",
     "minio>=7.2.0",          # Phase 5 — supplier-bill image storage (MinIO/S3)
+    "google-cloud-vision>=3.7.0",  # Phase 5 — OCR engine (Lebanese-Arabic bills)
 ]
 
 [dependency-groups]

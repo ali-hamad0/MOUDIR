@@ -12,6 +12,9 @@ vault kv put secret/modir/llm \
 vault kv put secret/modir/minio access_key="modir-access" secret_key="modir-secret-changeme"
 vault kv put secret/modir/auth jwt_secret="dev-jwt-secret-rotate-before-prod"
 vault kv put secret/modir/mail api_key="dev-mail-key-rotate-before-prod"
+# OCR (Phase 5): GCP service-account JSON. Placeholder in dev (stub mode ignores it);
+# provide a real service-account JSON only when ocr_mode=cloud_vision.
+vault kv put secret/modir/ocr service_account_json="{}"
 
 echo "Vault seeded with placeholder secrets."
 echo "Replace placeholders before production!"
