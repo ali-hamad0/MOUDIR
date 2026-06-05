@@ -11,6 +11,7 @@ from app.agents.order.agent import OrderAgent
 from app.api import (
     activation,
     admin,
+    approvals,
     auth,
     customers,
     inventory,
@@ -24,6 +25,7 @@ from app.api import (
 from app.db.session import create_engine
 from app.infra.logging import configure_logging, get_logger
 from app.infra.settings import Settings, get_settings
+from app.infra.supplier_dispatch import SupplierDispatcher
 from app.infra.vault import resolve_secrets
 from app.services.dispatcher import MessageDispatcher
 
@@ -82,6 +84,11 @@ async def lifespan(app: FastAPI):
     # PO inline when order completion drops stock below threshold.
     app.state.inventory_agent = InventoryAgent(app.state.llm_router, settings, sessionmaker)
     app.state.dispatcher = MessageDispatcher(app.state.order_agent, sessionmaker)
+    # The supplier dispatcher is built once here (like EmailSender / the agents):
+    # the approvals API (Task 4.12) fires its `dispatch` as a background task after
+    # an approve commits. It opens its OWN session per call from this sessionmaker,
+    # and it sends ONLY behind a valid signed token (ActionGate) — constitution V.
+    app.state.supplier_dispatcher = SupplierDispatcher(settings, sessionmaker)
     log.info("modir.agents.ready", langsmith=settings.langsmith_tracing)
 
     # Future: app.state.demand_model = joblib.load(...)
@@ -128,6 +135,7 @@ def create_app() -> FastAPI:
     app.include_router(profile.router)
     app.include_router(orders.router)
     app.include_router(inventory.router)
+    app.include_router(approvals.router)
     app.include_router(customers.router)
     app.include_router(me.router)
     app.include_router(webhooks.router)
