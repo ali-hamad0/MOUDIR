@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     # Lebanese-Arabic accuracy) and is verified on the HOST (Docker DNS is blocked
     # in-container). "tesseract" is reserved as a documented offline fallback.
     ocr_mode: str = Field(default="stub")  # "stub" | "cloud_vision" | "tesseract"
+    # A per-field confidence (0..1) at or below this is FLAGGED for closer review in
+    # the UI (Task 5.6/5.12). It is a review SIGNAL, never an auto-commit switch:
+    # every bill goes to a human in Phase 5 regardless of confidence.
+    ocr_confidence_review_threshold: float = Field(default=0.75)
     # GCP service-account JSON for Cloud Vision — RESOLVED FROM VAULT (modir/ocr),
     # not env. The whole service-account credential is stored as one JSON string and
     # the Vision client is built from it (json.loads → from_service_account_info).

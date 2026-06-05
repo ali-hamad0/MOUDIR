@@ -12,6 +12,7 @@ from app.infra.ocr.engine import (
     StubOCREngine,
     build_ocr_engine,
 )
+from app.infra.ocr.preprocess import preprocess
 
 __all__ = [
     "OCRBlock",
@@ -19,4 +20,5 @@ __all__ = [
     "OCRResult",
     "StubOCREngine",
     "build_ocr_engine",
+    "preprocess",
 ]

@@ -26,6 +26,7 @@ dependencies = [
     "aiosmtplib>=5.1.1",
     "minio>=7.2.0",          # Phase 5 — supplier-bill image storage (MinIO/S3)
     "google-cloud-vision>=3.7.0",  # Phase 5 — OCR engine (Lebanese-Arabic bills)
+    "pillow>=11.0.0",        # Phase 5 — bill image preprocessing (deskew/denoise/contrast)
 ]
 
 [dependency-groups]
