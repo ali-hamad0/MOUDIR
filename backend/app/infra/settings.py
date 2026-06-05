@@ -25,10 +25,16 @@ class Settings(BaseSettings):
     vault_addr: str
     vault_token: SecretStr
 
-    # MinIO (later phases)
+    # MinIO — supplier-bill image storage (Phase 5). Endpoint + creds; the creds
+    # resolve from Vault (modir/minio). The bucket holds bill images under
+    # tenant-prefixed keys (the Wall for object storage — see app/infra/storage.py).
     minio_endpoint: str = Field(default="minio:9000")
     minio_access_key: SecretStr = Field(default=SecretStr("changeme"))
     minio_secret_key: SecretStr = Field(default=SecretStr("changeme"))
+    minio_bucket: str = Field(default="modir-bills")
+    # TLS to MinIO. Off in dev (the compose MinIO speaks plain HTTP on the internal
+    # network); a real deployment terminates TLS and sets this True.
+    minio_secure: bool = Field(default=False)
 
     # Dashboard CORS — the React app (Phase 3) runs on a different origin, so the
     # browser needs explicit cross-origin permission. A typed list, never "*"
