@@ -25,6 +25,7 @@ from app.api import (
 from app.db.session import create_engine
 from app.infra.logging import configure_logging, get_logger
 from app.infra.settings import Settings, get_settings
+from app.infra.storage import StorageClient
 from app.infra.supplier_dispatch import SupplierDispatcher
 from app.infra.vault import resolve_secrets
 from app.services.dispatcher import MessageDispatcher
@@ -89,6 +90,12 @@ async def lifespan(app: FastAPI):
     # an approve commits. It opens its OWN session per call from this sessionmaker,
     # and it sends ONLY behind a valid signed token (ActionGate) — constitution V.
     app.state.supplier_dispatcher = SupplierDispatcher(settings, sessionmaker)
+    # Object storage for supplier-bill images (Phase 5). Built once here like the
+    # other infra clients; the bill bucket is ensured at startup (idempotent). The
+    # upload API streams to it and the OCR worker fetches from it — always under
+    # tenant-prefixed keys (the Wall for storage).
+    app.state.storage = StorageClient(settings)
+    await app.state.storage.ensure_bucket()
     log.info("modir.agents.ready", langsmith=settings.langsmith_tracing)
 
     # Future: app.state.demand_model = joblib.load(...)
