@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -20,6 +21,12 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+# Embedding dimension for the vector_chunks column (Phase 5). Must match
+# Settings.embedding_dim and the embedding model (text-embedding-004 = 768). Changing
+# it is a migration. Kept as a module constant so the model and a future migration
+# agree on one number.
+EMBEDDING_DIM = 768
 
 
 class Base(DeclarativeBase):
@@ -604,6 +611,52 @@ class SupplierBillEvent(Base):
     )
     event: Mapped[str] = mapped_column(String(64), nullable=False)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+# ── Phase 5 — RAG vector store (pgvector) ───────────────────────────────────
+
+
+class VectorChunk(Base):
+    """An embedded chunk of tenant content for RAG retrieval (pgvector).
+
+    The Wall (constitution I): non-nullable, indexed tenant_id; EVERY retrieval
+    filters by tenant_id BEFORE the similarity order-by (constitution I, literal —
+    never filter after similarity). Two corpora share this table, distinguished by
+    `corpus`:
+      - "knowledge" — products, policies, hours (from knowledge_base_docs)
+      - "bills"     — committed supplier bills (historical, for Phase 6 context)
+
+    `source_type`/`source_id` point back at the row the chunk came from (e.g.
+    ("product", product_id)); `content_hash` lets the worker skip re-embedding
+    unchanged content; `chunk_index` orders the chunks of one source. The embedding
+    is a fixed-width pgvector column — its dimension MUST match Settings.embedding_dim
+    and the embedding model (changing it is a migration).
+    """
+
+    __tablename__ = "vector_chunks"
+    __table_args__ = (
+        # One chunk row per (tenant, corpus, source, chunk index). Re-embedding a
+        # source replaces its chunks, so this stays unique.
+        UniqueConstraint(
+            "tenant_id",
+            "corpus",
+            "source_type",
+            "source_id",
+            "chunk_index",
+            name="uq_vector_chunk_source",
+        ),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    corpus: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
 
 
 class Admin(Base):
