@@ -303,6 +303,24 @@ class SupplierBillService:
         await self._session.flush()
         return bill
 
+    async def mark_line_committed(self, *, tenant_id: UUID, line: SupplierBillLine) -> None:
+        """Flag one bill line as applied to stock (set during the gated commit).
+
+        Tenant-scoped defensively: the line is only flagged if it belongs to this
+        tenant (it always does — the committer loads lines tenant-scoped — but the
+        guard keeps the Wall explicit). Audited `bill.line_committed`. Flushes, does
+        not commit (joins the committer's transaction)."""
+        if line.tenant_id != tenant_id:
+            return
+        line.committed = True
+        await self._audit.record(
+            tenant_id=tenant_id,
+            actor_id=None,
+            action="bill.line_committed",
+            target=str(line.id),
+        )
+        await self._session.flush()
+
     async def revert_to_extracted(
         self, *, tenant_id: UUID, bill_id: UUID, error: str
     ) -> SupplierBill:
