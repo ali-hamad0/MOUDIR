@@ -38,6 +38,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /app/.venv /app/.venv
 
 COPY app ./app
+# Lebanese-Arabic prompt copy lives in prompts/ (constitution: never inline in
+# agent code). The agents import `from prompts import ...`, so the package must be
+# in the image — the api gets it via the dev bind-mount, but the worker runs the
+# baked image, so it MUST be copied here.
+COPY prompts ./prompts
 COPY alembic ./alembic
 COPY alembic.ini ./
 
