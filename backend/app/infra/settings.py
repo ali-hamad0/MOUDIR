@@ -36,6 +36,16 @@ class Settings(BaseSettings):
     # network); a real deployment terminates TLS and sets this True.
     minio_secure: bool = Field(default=False)
 
+    # Supplier-bill upload limits (Phase 5). A bill is a phone photo; cap the size
+    # so a hostile or accidental huge upload can't exhaust memory/storage, and
+    # restrict to image types the OCR engine can read. Enforced at the upload route.
+    bill_upload_max_bytes: int = Field(default=10 * 1024 * 1024)  # 10 MiB
+    bill_upload_allowed_content_types: list[str] = Field(
+        default=["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]
+    )
+    # TTL for the presigned image URL the review screen uses (Task 5.12).
+    bill_image_url_ttl_minutes: int = Field(default=15)
+
     # Dashboard CORS — the React app (Phase 3) runs on a different origin, so the
     # browser needs explicit cross-origin permission. A typed list, never "*"
     # with credentials (that combination is a security hole the browser itself
