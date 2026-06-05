@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.agents.inventory.agent import InventoryAgent
 from app.agents.llm.router import GeminiRouter
+from app.agents.ocr.agent import BillExtractionAgent
 from app.agents.order.agent import OrderAgent
 from app.api import (
     activation,
@@ -86,6 +87,10 @@ async def lifespan(app: FastAPI):
     # per call. Task 4.9 reaches it via app.state.inventory_agent to draft a reorder
     # PO inline when order completion drops stock below threshold.
     app.state.inventory_agent = InventoryAgent(app.state.llm_router, settings, sessionmaker)
+    # The BillExtractionAgent mirrors the other agents: built once, opens its own
+    # session per call. The OCR worker (Task 5.8) reaches it via
+    # app.state.bill_agent to structure an uploaded bill's OCR text into a BillData.
+    app.state.bill_agent = BillExtractionAgent(app.state.llm_router, settings, sessionmaker)
     app.state.dispatcher = MessageDispatcher(app.state.order_agent, sessionmaker)
     # The supplier dispatcher is built once here (like EmailSender / the agents):
     # the approvals API (Task 4.12) fires its `dispatch` as a background task after
