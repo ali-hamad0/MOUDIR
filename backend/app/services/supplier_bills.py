@@ -35,9 +35,29 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import SupplierBill, SupplierBillEvent, SupplierBillLine
-from app.repositories.supplier_bills import SupplierBillRepository
+from app.api.schemas.bills import BillRead
+from app.db.models import Supplier, SupplierBill, SupplierBillEvent, SupplierBillLine
+from app.repositories.supplier_bills import REVIEW_STATUSES, SupplierBillRepository
 from app.services.audit import AuditService
+
+
+def _to_read(bill: SupplierBill, supplier: Supplier | None) -> BillRead:
+    """Map a bill (joined to its supplier, if mapped) to the review read model."""
+    return BillRead(
+        id=bill.id,
+        status=bill.status,
+        supplier_id=bill.supplier_id,
+        supplier_name=supplier.name if supplier is not None else None,
+        original_filename=bill.original_filename,
+        bill_date=bill.bill_date,
+        total_amount=bill.total_amount,
+        currency=bill.currency,
+        min_confidence=bill.min_confidence,
+        reject_reason=bill.reject_reason,
+        reviewed_at=bill.reviewed_at,
+        committed_at=bill.committed_at,
+        created_at=bill.created_at,
+    )
 
 
 class SupplierBillNotFound(Exception):
@@ -98,6 +118,26 @@ class SupplierBillService:
             )
         )
 
+    async def list_for_review(
+        self,
+        *,
+        tenant_id: UUID,
+        statuses: Sequence[str] = REVIEW_STATUSES,
+        limit: int,
+        offset: int,
+    ) -> tuple[int, list[BillRead]]:
+        """One page of this tenant's review list plus the total count, both scoped.
+
+        Joins each bill to its supplier (if mapped) for display — the JOIN is
+        tenant-scoped on both sides in the repo (constitution I). Read-only; no
+        commit (the caller's request transaction is closed by the session dep)."""
+        total = await self._repo.count_for_review(tenant_id, statuses=statuses)
+        rows = await self._repo.list_for_review(
+            tenant_id, statuses=statuses, limit=limit, offset=offset
+        )
+        items = [_to_read(bill, supplier) for bill, supplier in rows]
+        return total, items
+
     async def create_uploaded(
         self,
         *,
@@ -105,17 +145,26 @@ class SupplierBillService:
         object_key: str,
         original_filename: str | None,
         content_type: str | None,
+        bill_id: UUID | None = None,
         actor_id: UUID | None = None,
     ) -> SupplierBill:
         """Record a freshly uploaded bill in `uploaded`. The image is already in
         MinIO under `object_key`; the worker picks it up next. NEVER touches stock.
-        Writes an `uploaded` breadcrumb and audits `bill.uploaded`."""
+        Writes an `uploaded` breadcrumb and audits `bill.uploaded`.
+
+        `bill_id` may be supplied so the caller can build the (tenant-prefixed)
+        MinIO key from the id BEFORE the upload, then persist the row with that same
+        id and key — one write, no NULL key window. Omitted in tests where the key
+        is synthetic.
+        """
         bill = SupplierBill(
             object_key=object_key,
             original_filename=original_filename,
             content_type=content_type,
             status="uploaded",
         )
+        if bill_id is not None:
+            bill.id = bill_id
         bill = await self._repo.add(tenant_id, bill)
         self._event(tenant_id, bill.id, "uploaded")
         await self._audit.record(
