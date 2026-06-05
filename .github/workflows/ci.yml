@@ -68,6 +68,12 @@ jobs:
 
       - name: Run tests
         working-directory: ./backend
+        # The whole tests/ tree runs, so new suites are picked up automatically —
+        # including the Phase 4 inventory-deduction (atomicity, oversell race,
+        # tenant isolation) and HIL purchase-order suites (no-send-without-token,
+        # approve→dispatch, reject, retry→manual, audit, Wall). The LLM is mocked
+        # and the supplier webhook is stubbed, so the suite stays offline; the
+        # live smoke test is deselected as before.
         run: uv run pytest tests -v
 
       - name: Forbidden patterns check
@@ -78,6 +84,9 @@ jobs:
             || (echo "Found os.getenv() outside Settings"; exit 1)
           ! grep -rEn --include="*.py" "(^|[^.[:alnum:]_])print\(" backend/app/ \
             || (echo "Found print() — use structlog"; exit 1)
+          # Phase 4's supplier_dispatch.py POSTs the reorder webhook with
+          # httpx.AsyncClient — this guard keeps it (and every other module) off
+          # the banned requests library.
           ! grep -rn --include="*.py" "import requests" backend/app/ \
             || (echo "Found requests — use httpx.AsyncClient"; exit 1)
 
@@ -85,7 +94,9 @@ jobs:
         run: |
           # Constitution: application code never imports a provider SDK directly.
           # The LLM provider SDK is allowed ONLY inside app/agents/llm/ (the router
-          # boundary). Anywhere else in app/ is a violation.
+          # boundary). Anywhere else in app/ is a violation — in particular the
+          # Phase 4 InventoryAgent reaches the model through the router's tier1(),
+          # never the SDK, so app/agents/inventory/ must stay clean here.
           offenders=$(grep -rln --include="*.py" \
             "langchain_google_genai\|google.generativeai\|google.genai" backend/app/ \
             | grep -v "backend/app/agents/llm/") || true
@@ -133,8 +144,10 @@ jobs:
             exit 1
           fi
 
-  # The dashboard (Phase 3) is its own deployable; lint, typecheck, and build it
+  # The dashboard is its own deployable; lint, typecheck, and build it
   # independently of the backend job. A type error or build failure fails CI.
+  # Covers the Phase 4 additions — the inventory view and the owner approvals
+  # inbox — alongside the earlier Phase 3 pages.
   frontend:
     runs-on: ubuntu-latest
     defaults:
