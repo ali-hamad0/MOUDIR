@@ -25,12 +25,15 @@ from app.agents.order.schemas import ParsedOrder
 from app.agents.order.tools import (
     CatalogItem,
     ToolContext,
+    answer_from_knowledge,
     confirm_order,
     get_products,
     parse_order,
+    search_knowledge_base,
 )
 from app.domain.errors import ProductNotInCatalog, ProductUnavailable
 from app.domain.identity import ResolvedIdentity
+from app.infra.embeddings import EmbeddingClient
 from app.infra.logging import get_logger
 from app.infra.settings import Settings
 from prompts import order_ar
@@ -69,9 +72,19 @@ async def _load_catalog(state: _OrderState, config: RunnableConfig) -> _OrderSta
 
 async def _parse(state: _OrderState, config: RunnableConfig) -> _OrderState:
     parsed = await parse_order(_ctx_of(config), state["text"], state["catalog"])
-    if parsed is None:
-        return {"parsed": None, "reply": order_ar.DID_NOT_UNDERSTAND}
+    # A None parse means the message isn't an order we could resolve. Don't reply
+    # "didn't understand" yet — it might be a question (delivery zone, hours, policy);
+    # route to the knowledge base first (Task 5.16).
     return {"parsed": parsed}
+
+
+async def _search_kb(state: _OrderState, config: RunnableConfig) -> _OrderState:
+    """Last resort for a non-order message: retrieve from the knowledge base and
+    answer if anything relevant is found, else fall back to 'didn't understand'."""
+    ctx = _ctx_of(config)
+    chunks = await search_knowledge_base(ctx, state["text"])
+    answer = await answer_from_knowledge(ctx, state["text"], chunks)
+    return {"reply": answer or order_ar.DID_NOT_UNDERSTAND}
 
 
 async def _confirm(state: _OrderState, config: RunnableConfig) -> _OrderState:
@@ -90,16 +103,19 @@ def _build_graph():
     graph.add_node("load_catalog", _load_catalog)
     graph.add_node("parse", _parse)
     graph.add_node("confirm", _confirm)
+    graph.add_node("search_kb", _search_kb)
 
     graph.add_edge(START, "load_catalog")
     graph.add_edge("load_catalog", "parse")
-    # A None parse result short-circuits to END with the reply already set.
+    # An order routes to confirm; a non-order routes to the knowledge base (which
+    # answers a question from RAG, or falls back to "didn't understand").
     graph.add_conditional_edges(
         "parse",
-        lambda state: "confirm" if state.get("parsed") is not None else END,
-        {"confirm": "confirm", END: END},
+        lambda state: "confirm" if state.get("parsed") is not None else "search_kb",
+        {"confirm": "confirm", "search_kb": "search_kb"},
     )
     graph.add_edge("confirm", END)
+    graph.add_edge("search_kb", END)
     return graph.compile()
 
 
@@ -111,10 +127,14 @@ class OrderAgent:
         router: LLMRouter,
         settings: Settings,
         sessionmaker: async_sessionmaker,
+        embedding_client: EmbeddingClient | None = None,
     ) -> None:
         self._router = router
         self._settings = settings
         self._sessionmaker = sessionmaker
+        # The RAG embedder for the search_knowledge_base fallback (Task 5.16).
+        # Optional so a test or an early-phase build without RAG still works.
+        self._embedding_client = embedding_client
         self._graph = _build_graph()
 
     async def handle(self, text: str, identity: ResolvedIdentity) -> str:
@@ -125,6 +145,7 @@ class OrderAgent:
                 identity=identity,
                 router=self._router,
                 settings=self._settings,
+                embedding_client=self._embedding_client,
             )
             log.info(
                 "order_agent.handle",
