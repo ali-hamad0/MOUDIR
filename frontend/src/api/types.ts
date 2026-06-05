@@ -57,6 +57,44 @@ export interface OrdersPage {
   offset: number;
 }
 
+// ---- Inventory + suppliers (mirrors app/api/schemas/inventory.py) ----
+
+export interface InventoryRead {
+  product_id: string;
+  name_ar: string;
+  name_en: string | null;
+  quantity: number;
+  reorder_threshold: number | null;
+  reorder_quantity: number | null;
+  supplier_id: string | null;
+  is_low: boolean;
+}
+
+export interface InventoryPage {
+  items: InventoryRead[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+// PUT /inventory/{product_id}  (InventoryUpsert). Optional fields are null when
+// the owner clears them; the backend treats null threshold as "untracked low".
+export interface InventoryUpsert {
+  quantity: number;
+  reorder_threshold: number | null;
+  reorder_quantity: number | null;
+  supplier_id: string | null;
+}
+
+export interface SupplierRead {
+  id: string;
+  name: string;
+  dispatch_type: string;
+  webhook_url: string | null;
+  contact_email: string | null;
+  is_active: boolean;
+}
+
 // ---- Customers list (mirrors app/api/schemas/customers.py) ----
 
 export interface CustomerRead {

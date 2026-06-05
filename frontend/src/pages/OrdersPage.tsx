@@ -1,8 +1,11 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import { ordersApi } from "../api/orders";
+import { ApiError } from "../api/client";
 import type { OrderRead } from "../api/types";
 import { Button } from "../components/Button";
+import { CheckIcon } from "../components/icons";
+import { Toast, type ToastState } from "../components/Toast";
 import { formatLbp, formatTime, formatUsd } from "../format";
 import { usePolling } from "../hooks/usePolling";
 import { fulfillmentLabel, statusMeta, t } from "../i18n";
@@ -12,6 +15,7 @@ const POLL_MS = 5000;
 export default function OrdersPage() {
   const fetcher = useCallback(() => ordersApi.today(), []);
   const { data, loading, error, refetch } = usePolling(fetcher, POLL_MS);
+  const [toast, setToast] = useState<ToastState | null>(null);
 
   return (
     <div className="flex flex-col gap-4">
@@ -26,17 +30,56 @@ export default function OrdersPage() {
       ) : (
         <ul className="flex flex-col gap-3">
           {data.items.map((order) => (
-            <OrderCard key={order.id} order={order} />
+            <OrderCard
+              key={order.id}
+              order={order}
+              onCompleted={() => {
+                setToast({ kind: "success", message: t.orderCompleted });
+                refetch();
+              }}
+              onError={(message) => setToast({ kind: "error", message })}
+            />
           ))}
         </ul>
       )}
+
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
     </div>
   );
 }
 
-function OrderCard({ order }: { order: OrderRead }) {
+function OrderCard({
+  order,
+  onCompleted,
+  onError,
+}: {
+  order: OrderRead;
+  onCompleted: () => void;
+  onError: (message: string) => void;
+}) {
   const status = statusMeta(order.status);
   const usd = formatUsd(order.total_usd);
+  // The complete action is offered only on a confirmed order — completion
+  // deducts stock and is irreversible, so it sits behind an inline confirm.
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const canComplete = order.status === "confirmed";
+
+  async function complete() {
+    setBusy(true);
+    try {
+      await ordersApi.complete(order.id);
+      setConfirming(false);
+      onCompleted();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 0) onError(t.networkError);
+      else if (e instanceof ApiError && e.status === 409) onError(t.orderNotCompletable);
+      else onError(t.orderCompleteError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <li className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -88,6 +131,37 @@ function OrderCard({ order }: { order: OrderRead }) {
           <span className="tabular text-sm text-muted-foreground">{usd}</span>
         )}
       </div>
+
+      {canComplete && !confirming && (
+        <div className="mt-3 flex justify-end border-t border-border pt-3">
+          <Button onClick={() => setConfirming(true)} className="bg-accent">
+            <CheckIcon className="h-4 w-4" />
+            {t.markComplete}
+          </Button>
+        </div>
+      )}
+
+      {canComplete && confirming && (
+        <div className="mt-3 flex flex-col gap-3 border-t border-border pt-3">
+          <div>
+            <p className="font-medium text-foreground">{t.markCompleteConfirmTitle}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t.markCompleteConfirmBody}</p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              disabled={busy}
+              className="min-h-[44px] rounded-lg px-4 text-sm font-medium text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              {t.cancel}
+            </button>
+            <Button onClick={complete} loading={busy} className="bg-accent">
+              {t.markCompleteConfirm}
+            </Button>
+          </div>
+        </div>
+      )}
     </li>
   );
 }

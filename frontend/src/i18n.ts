@@ -37,6 +37,7 @@ export const t = {
   navHome: "الرئيسية",
   navOrders: "الطلبات",
   navCustomers: "الزباين",
+  navInventory: "المخزون",
   navSetup: "ضبط المحل",
   // App shell / whoami
   shop: "المحل",
@@ -64,7 +65,16 @@ export const t = {
   statusConfirmed: "مأكّد",
   statusPreparing: "عم نحضّر",
   statusDelivered: "تسلّم",
+  statusCompleted: "تخلّص",
   qtyTimes: "×", // "2 ×" before an item name
+  // Order — mark complete (triggers deduction + reorder drafting)
+  markComplete: "خلّص الطلب",
+  markCompleteConfirmTitle: "خلّص الطلب؟",
+  markCompleteConfirmBody: "رح ننقص الكميات من المخزون وما فينا نرجّع. متأكد؟",
+  markCompleteConfirm: "أكّد التخليص",
+  orderCompleted: "تخلّص الطلب وتنقص المخزون.",
+  orderCompleteError: "ما قدرنا نخلّص الطلب. جرّب مرة تانية.",
+  orderNotCompletable: "ما فينا نخلّص هالطلب (يمكن خلص قبل أو ما في مخزون كافي).",
   // Founder admin — approvals
   adminTitle: "إدارة مودير",
   adminLoginTitle: "دخول الإدارة",
@@ -108,6 +118,30 @@ export const t = {
   colOrders: "الطلبات",
   colTotalSpent: "مجموع المصاريف",
   colLastOrder: "آخر طلب",
+  // Inventory list
+  inventoryTitle: "المخزون",
+  noInventoryYet: "ما في منتجات بمخزونك بعد",
+  noInventoryHint: "ضيف منتجاتك من ضبط المحل وبعدها ضبّط الكميات هون.",
+  inventoryError: "ما قدرنا نجيب المخزون.",
+  colProduct: "المنتج",
+  colQuantity: "الكمية",
+  colThreshold: "حد إعادة الطلب",
+  colReorderQty: "كمية إعادة الطلب",
+  colSupplier: "المورّد",
+  lowStockBadge: "مخزون منخفض",
+  noSupplier: "بدون مورّد",
+  notSet: "غير محدّد",
+  edit: "عدّل",
+  // Inventory edit form
+  editInventoryTitle: "عدّل مخزون «{name}»",
+  fieldQuantity: "الكمية الحالية",
+  fieldThreshold: "حد إعادة الطلب",
+  fieldThresholdHint: "لما تنزل الكمية لهون أو أقل منشوف إنه المخزون منخفض.",
+  fieldReorderQty: "كمية إعادة الطلب",
+  fieldSupplier: "المورّد",
+  mustBeZeroOrMore: "لازم يكون رقم صفر أو أكتر.",
+  inventorySaved: "تحفظت الكمية.",
+  inventorySaveError: "ما قدرنا نحفظ. جرّب مرة تانية.",
   // Pagination
   prevPage: "السابق",
   nextPage: "التالي",
@@ -203,6 +237,9 @@ export function statusMeta(status: string): { label: string; cls: string } {
       return { label: t.statusPreparing, cls: "bg-status-pending/15 text-status-pending" };
     case "delivered":
       return { label: t.statusDelivered, cls: "bg-muted text-muted-foreground" };
+    case "completed":
+      // Terminal state after the owner marks an order complete (stock deducted).
+      return { label: t.statusCompleted, cls: "bg-muted text-muted-foreground" };
     case "confirmed":
     default:
       return { label: t.statusConfirmed, cls: "bg-accent/15 text-accent" };

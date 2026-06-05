@@ -8,6 +8,7 @@ import AdminLoginPage from "./pages/AdminLoginPage";
 import ApprovalsPage from "./pages/ApprovalsPage";
 import CustomersPage from "./pages/CustomersPage";
 import DashboardPage from "./pages/DashboardPage";
+import InventoryPage from "./pages/InventoryPage";
 import LoginPage from "./pages/LoginPage";
 import OrdersPage from "./pages/OrdersPage";
 import SetupWizard from "./pages/SetupWizard";
@@ -37,6 +38,7 @@ export default function App() {
           >
             <Route path="/" element={<DashboardPage />} />
             <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/setup" element={<SetupWizard />} />
           </Route>
