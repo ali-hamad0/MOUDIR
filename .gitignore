@@ -3,6 +3,16 @@ __pycache__/
 .venv/
 .env
 .env.local
+# Secrets / cloud credentials — NEVER commit. The real GCP service-account key is
+# provided to the app via Vault (modir/ocr), never the repo. These patterns catch
+# the common credential filenames without hiding legitimate config JSON.
+*-service-account*.json
+*service_account*.json
+*-credentials*.json
+gcp-*.json
+moudir-*.json
+*.pem
+*.key
 *.db
 *.log
 .pytest_cache/
