@@ -18,9 +18,11 @@ from app.agents.llm.router import LLMRouter
 from app.agents.order.schemas import ConfirmedOrder, ParsedOrder, ParsedOrderItem, RawOrder
 from app.db.models import Order
 from app.domain.identity import ResolvedIdentity
+from app.infra.embeddings import EmbeddingClient
 from app.infra.logging import get_logger
 from app.infra.settings import Settings
 from app.repositories.products import ProductRepository
+from app.repositories.vector_chunks import VectorChunkRepository
 from app.services.orders import OrderService
 from prompts import order_agent_ar
 
@@ -37,6 +39,9 @@ class ToolContext:
     identity: ResolvedIdentity
     router: LLMRouter
     settings: Settings
+    # The RAG embedder for search_knowledge_base (Task 5.16). Optional so a context
+    # built without RAG (older tests) still works; the tool no-ops without it.
+    embedding_client: EmbeddingClient | None = None
 
     @property
     def tenant_id(self) -> UUID:
@@ -225,3 +230,52 @@ async def confirm_order(ctx: ToolContext, parsed: ParsedOrder) -> Order:
         total_lbp=order.total_lbp,
     )
     return order
+
+
+# Max policy/hours chunks fed to the answer step — a bill's worth of context is
+# plenty for a single question; more just dilutes the prompt.
+_KB_TOP_K = 4
+
+
+async def search_knowledge_base(ctx: ToolContext, query: str) -> list[str]:
+    """Retrieve the most relevant `knowledge` chunks for a customer question.
+
+    Embeds the query and searches THIS tenant's knowledge corpus (products, policies,
+    hours), tenant-filtered BEFORE similarity (the Wall — VectorChunkRepository.search).
+    Read-only. Returns the chunk texts (possibly empty). Degrades to [] if there is no
+    embedder or the embed call fails — a retrieval hiccup must never crash the reply.
+    """
+    if ctx.embedding_client is None:
+        return []
+    try:
+        qvec = await ctx.embedding_client.embed_one(query)
+    except Exception as e:  # noqa: BLE001 — degrade, never crash the customer reply
+        log.warning("tool.search_kb.embed_error", tenant_id=str(ctx.tenant_id), error=str(e))
+        return []
+    hits = await VectorChunkRepository(ctx.session).search(
+        ctx.tenant_id, corpus="knowledge", query_embedding=qvec, k=_KB_TOP_K
+    )
+    log.info("tool.search_kb", tenant_id=str(ctx.tenant_id), hits=len(hits))
+    return [h.chunk_text for h in hits]
+
+
+async def answer_from_knowledge(ctx: ToolContext, query: str, chunks: list[str]) -> str | None:
+    """Compose a Lebanese-Arabic answer to `query` GROUNDED in the retrieved chunks.
+
+    Returns None when there is nothing to ground on (no chunks) — the caller then
+    falls back to "didn't understand" rather than letting the model invent an answer.
+    The model is told to answer ONLY from the provided context and to say it doesn't
+    know otherwise (no hallucinated policy). A provider error degrades to None.
+    """
+    if not chunks:
+        return None
+    context = "\n".join(f"- {c}" for c in chunks)
+    system = order_agent_ar.KB_ANSWER_SYSTEM.format(context=context)
+    messages = [SystemMessage(content=system), HumanMessage(content=query)]
+    try:
+        reply = await ctx.router.tier1().ainvoke(messages)
+    except Exception as e:  # noqa: BLE001 — degrade to None, never crash
+        log.warning("tool.answer_kb.llm_error", tenant_id=str(ctx.tenant_id), error=str(e))
+        return None
+    text = (reply.content if hasattr(reply, "content") else str(reply)).strip()
+    return text or None

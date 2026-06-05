@@ -84,7 +84,14 @@ async def lifespan(app: FastAPI):
         app.state.db_engine, class_=AsyncSession, expire_on_commit=False
     )
     app.state.llm_router = GeminiRouter(settings)
-    app.state.order_agent = OrderAgent(app.state.llm_router, settings, sessionmaker)
+    # Embedding client (Phase 5 RAG). Provider-agnostic, built once; `stub` for dev/CI
+    # (offline), `gemini` for the real embedder (keyed by the existing Vault
+    # gemini_api_key). Built before the OrderAgent so its search_knowledge_base tool
+    # (Task 5.16) can use it; the worker (Task 5.15) also embeds KB docs + bills.
+    app.state.embedding_client = build_embedding_client(settings)
+    app.state.order_agent = OrderAgent(
+        app.state.llm_router, settings, sessionmaker, app.state.embedding_client
+    )
     # The InventoryAgent mirrors the OrderAgent: built once, opens its own session
     # per call. Task 4.9 reaches it via app.state.inventory_agent to draft a reorder
     # PO inline when order completion drops stock below threshold.
@@ -117,11 +124,6 @@ async def lifespan(app: FastAPI):
     # structures that text (constitution IV). The provider SDK stays confined to
     # app/infra/ocr/cloud_vision.py.
     app.state.ocr_engine = build_ocr_engine(settings)
-    # Embedding client (Phase 5 RAG). Provider-agnostic, built once here; `stub` for
-    # dev/CI (offline), `gemini` for the real embedder (keyed by the existing Vault
-    # gemini_api_key). The worker (Task 5.15) embeds knowledge_base_docs + committed
-    # bills with it; the OrderAgent's search tool (Task 5.16) embeds the query.
-    app.state.embedding_client = build_embedding_client(settings)
     log.info(
         "modir.agents.ready",
         langsmith=settings.langsmith_tracing,
