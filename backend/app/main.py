@@ -25,6 +25,7 @@ from app.api import (
     webhooks,
 )
 from app.db.session import create_engine
+from app.infra.bill_committer import BillCommitter
 from app.infra.logging import configure_logging, get_logger
 from app.infra.ocr import build_ocr_engine
 from app.infra.settings import Settings, get_settings
@@ -97,6 +98,12 @@ async def lifespan(app: FastAPI):
     # an approve commits. It opens its OWN session per call from this sessionmaker,
     # and it sends ONLY behind a valid signed token (ActionGate) — constitution V.
     app.state.supplier_dispatcher = SupplierDispatcher(settings, sessionmaker)
+    # The bill committer applies an approved OCR'd bill to stock (Phase 5). Built
+    # once here like the supplier dispatcher; the bill-review API (Task 5.12) fires
+    # its `commit` as a background task after an approve commits. It opens its OWN
+    # session per call and applies stock ONLY behind a valid signed bill.commit token
+    # (the SAME ActionGate as PO dispatch — a new action string, not a new gate).
+    app.state.bill_committer = BillCommitter(settings, sessionmaker)
     # Object storage for supplier-bill images (Phase 5). Built once here like the
     # other infra clients; the bill bucket is ensured at startup (idempotent). The
     # upload API streams to it and the OCR worker fetches from it — always under
