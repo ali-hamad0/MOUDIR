@@ -1,16 +1,16 @@
 """Google Gemini embedding client (Phase 5) — the real RAG embedder.
 
-THIS is one of the two modules allowed to import the Google GenAI SDK (the other is
-the LLM router); the embedding SDK is confined here, the constitution's
-provider-agnostic boundary. The key is the existing Vault-resolved
-`Settings.gemini_api_key` — NO new secret to seed.
+This lives under `app/agents/llm/` because it imports the Google GenAI SDK, and the
+constitution's provider-agnostic boundary (enforced by CI) confines that SDK to this
+ONE directory — the same place the LLM router lives. The provider-agnostic
+`EmbeddingClient` Protocol + stub + factory stay in `app/infra/embeddings.py` (no SDK
+there); only this concrete provider client lives next to the router.
 
-The vectors are unit-normalized to match the stub (so cosine distance behaves the
-same), and truncated/validated to `settings.embedding_dim` so they always match the
-pgvector column width.
+The key is the existing Vault-resolved `Settings.gemini_api_key` — NO new secret to
+seed. Vectors are unit-normalized to match the stub (so cosine distance behaves the
+same), and validated to `settings.embedding_dim` so they match the pgvector column.
 
-Verified on the HOST venv (Docker DNS is blocked in-container); CI/tests use the
-stub.
+Verified on the HOST venv (Docker DNS is blocked in-container); CI/tests use the stub.
 """
 
 import numpy as np

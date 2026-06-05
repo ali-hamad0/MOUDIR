@@ -8,9 +8,11 @@ implementations, selected by `Settings.embedding_mode`:
   the dev default. Offline, no network, no key. The same text always maps to the
   same unit vector, so retrieval is exact-match-friendly in tests (an identical
   query and chunk are maximally similar) without any model.
-- `GeminiEmbeddingClient` (in `gemini_embeddings.py`) — the real embedder, keyed by
-  the existing Vault `gemini_api_key` (no new secret). The provider SDK is confined
-  to that module (the same boundary cloud_vision.py keeps for Vision).
+- `GeminiEmbeddingClient` (in `app/agents/llm/gemini_embeddings.py`) — the real
+  embedder, keyed by the existing Vault `gemini_api_key` (no new secret). It lives
+  under `app/agents/llm/` because it imports the Google GenAI SDK, which the
+  constitution's provider-agnostic boundary (CI-enforced) confines to that one
+  directory alongside the LLM router.
 
 The stub and the real client both return unit-norm vectors of `settings.embedding_dim`
 length, so they are interchangeable behind the Protocol and match the pgvector column
@@ -88,7 +90,9 @@ def build_embedding_client(settings: Settings) -> EmbeddingClient:
     """
     mode = settings.embedding_mode
     if mode == "gemini":
-        from app.infra.gemini_embeddings import GeminiEmbeddingClient
+        # Imported from app/agents/llm/ — the one directory the provider SDK is
+        # confined to (CI-enforced boundary). Lazy so the stub path never needs it.
+        from app.agents.llm.gemini_embeddings import GeminiEmbeddingClient
 
         log.info("embeddings.client.selected", mode=mode, dim=settings.embedding_dim)
         return GeminiEmbeddingClient(settings)
