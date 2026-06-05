@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import Row, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Product, Supplier, SupplierBill, SupplierBillLine
 from app.repositories.base import TenantScopedRepository
@@ -118,3 +119,21 @@ class SupplierBillRepository(TenantScopedRepository[SupplierBill]):
             .order_by(SupplierBillLine.created_at.asc())
         )
         return (await self._session.execute(stmt)).all()
+
+
+async def tenants_with_claimable_bills(
+    session: AsyncSession,
+    *,
+    statuses: Sequence[str] = CLAIMABLE_STATUSES,
+) -> Sequence[UUID]:
+    """The distinct tenant ids that currently have bills awaiting OCR.
+
+    This is the ONE deliberately cross-tenant query in the OCR path: the worker has
+    no request/JWT to scope it, so it discovers WHICH tenants have work, then
+    processes each one tenant-scoped through SupplierBillRepository (Task 5.8). Only
+    tenant IDS cross here — never a tenant's bill data — and they are used purely to
+    re-enter the Wall, never to read across it (constitution I). It is a module
+    function, not a method on the tenant-scoped repo, to keep that boundary explicit.
+    """
+    stmt = select(SupplierBill.tenant_id).where(SupplierBill.status.in_(tuple(statuses))).distinct()
+    return (await session.execute(stmt)).scalars().all()

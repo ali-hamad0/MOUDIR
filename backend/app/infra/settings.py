@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     # the UI (Task 5.6/5.12). It is a review SIGNAL, never an auto-commit switch:
     # every bill goes to a human in Phase 5 regardless of confidence.
     ocr_confidence_review_threshold: float = Field(default=0.75)
+
+    # Background worker (Phase 5, Task 5.8). How often the OCR worker polls for
+    # claimable bills (and, later, pending embeddings), and how many it claims per
+    # tenant per pass. Poll-based for now; Phase 8 may move to a durable queue.
+    worker_poll_seconds: float = Field(default=5.0)
+    worker_batch_size: int = Field(default=10)
     # GCP service-account JSON for Cloud Vision — RESOLVED FROM VAULT (modir/ocr),
     # not env. The whole service-account credential is stored as one JSON string and
     # the Vision client is built from it (json.loads → from_service_account_info).

@@ -139,6 +139,33 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # Background OCR worker (Phase 5) — the project's first worker. SAME image as the
+  # api, a different entrypoint: it polls for uploaded supplier bills and runs the
+  # OCR pipeline OUT of the api container (OCR takes seconds; it must never block a
+  # request). Same dependency chain as api (db/vault/seed/migrate ready first).
+  worker:
+    build:
+      context: ./backend
+    env_file: .env
+    networks:
+      - modir_net
+    # Runtime image has deps baked into .venv (on PATH); call python directly.
+    command: ["python", "-m", "app.worker"]
+    volumes:
+      - api_logs:/var/log/modir
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      vault:
+        condition: service_started
+      vault-seed:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+
 volumes:
   db_data:
   redis_data:
