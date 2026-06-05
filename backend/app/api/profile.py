@@ -35,6 +35,15 @@ async def upsert_profile(payload: ProfileUpsert, user: CurrentUser, db: Db) -> P
     return ProfileResponse.model_validate(profile)
 
 
+@router.get("/products", response_model=list[ProductResponse])
+async def list_products(user: CurrentUser, db: Db) -> list[ProductResponse]:
+    """This tenant's full catalog — used by the bill-review screen's product picker
+    (Task 5.18) to map an OCR'd line to any product, tracked in inventory or not.
+    Tenant-scoped (the Wall); never another tenant's catalog."""
+    products = await ProfileService(db).list_products(tenant_id=user.tenant_id)
+    return [ProductResponse.model_validate(p) for p in products]
+
+
 @router.post("/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 async def create_product(payload: ProductWrite, user: CurrentUser, db: Db) -> ProductResponse:
     product = await ProfileService(db).create_product(

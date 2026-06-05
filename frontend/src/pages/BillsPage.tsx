@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { billsApi } from "../api/bills";
 import { ApiError } from "../api/client";
@@ -95,9 +96,13 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// Bills with something to look at are clickable through to the review screen;
+// a bill still being OCR'd (uploaded/processing) has nothing to show yet.
+const REVIEWABLE = new Set(["extracted", "ocr_failed", "committed", "rejected"]);
+
 function BillCard({ bill }: { bill: BillRead }) {
-  return (
-    <li className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+  const body = (
+    <>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate font-semibold text-foreground">
@@ -128,8 +133,22 @@ function BillCard({ bill }: { bill: BillRead }) {
           )}
         </dl>
       )}
-    </li>
+    </>
   );
+
+  if (REVIEWABLE.has(bill.status)) {
+    return (
+      <li>
+        <Link
+          to={`/bills/${bill.id}`}
+          className="block rounded-2xl border border-border bg-card p-4 shadow-sm transition-colors hover:border-primary/40"
+        >
+          {body}
+        </Link>
+      </li>
+    );
+  }
+  return <li className="rounded-2xl border border-border bg-card p-4 shadow-sm">{body}</li>;
 }
 
 function Skeletons() {

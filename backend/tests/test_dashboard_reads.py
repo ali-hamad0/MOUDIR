@@ -221,3 +221,20 @@ async def test_me_returns_only_callers_tenant(
     assert me.tenant_id == a.tenant_id
     assert me.tenant_id != b.tenant_id
     assert me.email == a.user_email
+
+
+# -------------------------------------------------------------------- /products
+async def test_list_products_is_tenant_scoped(
+    db_session: AsyncSession, two_tenants: TwoTenants
+) -> None:
+    """GET /products returns this tenant's full catalog (the bill-review picker
+    source, 5.18) and never another tenant's — the Wall."""
+    from app.api.profile import list_products
+
+    a, b = two_tenants.a, two_tenants.b
+    user_a = await _user(db_session, a.tenant_id, a.user_email)
+    products = await list_products(user=user_a, db=db_session)
+
+    ids = {p.id for p in products}
+    assert ids == set(a.product_ids)  # exactly A's three products
+    assert not (ids & set(b.product_ids))  # none of B's leak in

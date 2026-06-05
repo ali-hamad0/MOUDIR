@@ -64,6 +64,10 @@ class ProfileService:
         return profile
 
     # ---- Products ----
+    async def list_products(self, *, tenant_id: UUID) -> list[Product]:
+        """This tenant's full catalog, tenant-scoped (the bill-review picker, 5.18)."""
+        return list(await ProductRepository(self._session).list(tenant_id))
+
     async def create_product(
         self, *, tenant_id: UUID, actor_id: UUID, data: ProductWrite
     ) -> Product:

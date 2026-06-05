@@ -13,6 +13,8 @@ import { api } from "./client";
 // knowledge_base_docs rows as `pending` on each write).
 export const profileApi = {
   saveProfile: (data: ProfileUpsert) => api.put<unknown>("/profile", data),
+  // The tenant's full catalog — the bill-review product picker (Task 5.18).
+  listProducts: () => api.get<ProductResponse[]>("/products"),
   createProduct: (data: ProductWrite) =>
     api.post<ProductResponse>("/products", data),
   replaceHours: (days: DayHours[]) =>
