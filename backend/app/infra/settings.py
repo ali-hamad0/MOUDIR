@@ -78,6 +78,26 @@ class Settings(BaseSettings):
     # Provider API key — RESOLVED FROM VAULT, not env. Placeholder here.
     mail_api_key: SecretStr = Field(default=SecretStr("from-vault"))
 
+    # Supplier dispatch (the HIL send leg, Phase 4 — SupplierDispatcher). Mirrors
+    # the EmailSender shape: "dev" logs the PO payload (or posts to MailHog) and
+    # NEVER calls a real external supplier; "webhook" POSTs to the supplier's
+    # webhook_url via httpx. Dispatch only runs AFTER the signed approval token
+    # clears the ActionGate (constitution V) — these settings tune HOW it sends,
+    # never WHETHER it is authorized to.
+    po_dispatch_mode: str = Field(default="dev")  # "dev" (log/MailHog) | "webhook"
+    # Retry budget for a transient supplier failure. After this many attempts the
+    # PO is marked dispatch_failed and surfaced in the manual queue (Task 4.12) —
+    # the row is the source of truth, so a missed send is always recoverable.
+    po_dispatch_max_retries: int = Field(default=3)
+    # Base delay for exponential backoff between attempts (delay = base * 2**n).
+    po_dispatch_backoff_seconds: float = Field(default=1.0)
+    # Optional shared secret sent as a webhook auth header (X-Modir-Signature),
+    # so the supplier can verify the call really came from Modir. RESOLVED FROM
+    # VAULT, not env — placeholder here. Empty default means "no auth header"
+    # (dev / a supplier that does not require one); when a real shared secret is
+    # introduced, add it to vault.py secrets_map AND both seed paths.
+    po_dispatch_webhook_secret: SecretStr = Field(default=SecretStr(""))
+
     # Paths
     base_dir: Path = Field(default=Path(__file__).parent.parent.parent)
 
