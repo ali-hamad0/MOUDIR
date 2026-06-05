@@ -262,8 +262,14 @@ export const t = {
   category: "التصنيف",
   isAvailable: "متوفر",
   addProduct: "ضيف منتج",
+  addingProduct: "عم نضيف...",
   noProductsYet: "ما في منتجات بعد. ضيف أول منتج.",
   atLeastOneProduct: "لازم تضيف منتج واحد على الأقل.",
+  productsInStore: "منتجات محلّك",
+  productAdded: "تضاف المنتج.",
+  productLoadError: "ما قدرنا نجيب المنتجات.",
+  // Optional initial stock seeded with a product (creates its inventory row).
+  initialStock: "الكمية بالمخزون (اختياري)",
   // Step 3 — operating hours
   stepHoursTitle: "أوقات الدوام",
   closed: "مسكّر",

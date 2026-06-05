@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ApiError } from "../api/client";
+import { inventoryApi } from "../api/inventory";
 import { profileApi } from "../api/profile";
 import type {
   DayHours,
   PolicyUpsert,
+  ProductResponse,
   ProductWrite,
   ProfileUpsert,
 } from "../api/types";
@@ -39,7 +41,10 @@ export default function SetupWizard() {
     accepts_delivery: false,
     accepts_pickup: true,
   });
-  const [products, setProducts] = useState<ProductWrite[]>([]);
+  // Server-backed: products are created immediately when added (and loaded on
+  // entering the step), so the list reflects what's actually in the store and
+  // survives navigating back/forward.
+  const [products, setProducts] = useState<ProductResponse[]>([]);
   const [hours, setHours] = useState<DayHours[]>(
     DAY_LABELS.map((_, i) => ({
       day_of_week: i,
@@ -71,13 +76,13 @@ export default function SetupWizard() {
         await profileApi.saveProfile(profile);
         setStep(1);
       } else if (step === 1) {
+        // Products are created the moment they're added (in ProductsStep), so by
+        // here they already exist server-side; we only guard that there's at least
+        // one and advance. (No batch create → no duplicate-on-reentry.)
         if (products.length === 0) {
           setError(t.atLeastOneProduct);
           return;
         }
-        // Products are created individually; already-created ones aren't
-        // recreated because we only get here once per advance.
-        for (const p of products) await profileApi.createProduct(p);
         setStep(2);
       } else if (step === 2) {
         await profileApi.replaceHours(hours);
@@ -219,45 +224,96 @@ function ProductsStep({
   products,
   onChange,
 }: {
-  products: ProductWrite[];
-  onChange: (p: ProductWrite[]) => void;
+  products: ProductResponse[];
+  onChange: (p: ProductResponse[]) => void;
 }) {
-  const [draft, setDraft] = useState<ProductWrite>({
+  const blankDraft = {
     name_ar: "",
-    price_lbp: null,
-    price_usd: null,
+    price_lbp: "" as string,
+    price_usd: "" as string,
     is_available: true,
-  });
+    quantity: "" as string,
+  };
+  const [draft, setDraft] = useState(blankDraft);
+  const [adding, setAdding] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
-  function addDraft() {
+  // Load the store's existing products once, so the page SHOWS what's already
+  // there (the previous wizard only kept newly-typed products in local state and
+  // never fetched, so the catalog always looked empty on return).
+  useEffect(() => {
+    let alive = true;
+    profileApi
+      .listProducts()
+      .then((rows) => {
+        if (alive) onChange(rows);
+      })
+      .catch(() => {
+        if (alive) setLoadError(t.productLoadError);
+      })
+      .finally(() => {
+        if (alive) setLoaded(true);
+      });
+    return () => {
+      alive = false; // ignore a late response after the step unmounts
+    };
+    // onChange identity is stable from the parent for this step's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function addProduct() {
     if (!draft.name_ar.trim()) return;
-    onChange([...products, draft]);
-    setDraft({ name_ar: "", price_lbp: null, price_usd: null, is_available: true });
+    setAdding(true);
+    setAddError(null);
+    try {
+      const created = await profileApi.createProduct({
+        name_ar: draft.name_ar.trim(),
+        price_lbp: draft.price_lbp ? Number(draft.price_lbp) : null,
+        price_usd: draft.price_usd || null,
+        is_available: draft.is_available,
+      } as ProductWrite);
+      // Optionally seed the inventory row so stock shows up immediately.
+      if (draft.quantity.trim() && Number(draft.quantity) > 0) {
+        await inventoryApi.upsert(created.id, {
+          quantity: Number(draft.quantity),
+          reorder_threshold: null,
+          reorder_quantity: null,
+          supplier_id: null,
+        });
+      }
+      onChange([...products, created]);
+      setDraft(blankDraft);
+    } catch (err) {
+      setAddError(
+        err instanceof ApiError && err.status === 0 ? t.networkError : t.errorGeneric,
+      );
+    } finally {
+      setAdding(false);
+    }
   }
 
   return (
     <div className="flex flex-col gap-4">
-      {products.length === 0 ? (
+      <h3 className="text-sm font-semibold text-foreground">{t.productsInStore}</h3>
+
+      {!loaded ? (
+        <p className="text-sm text-muted-foreground">{t.loading}</p>
+      ) : loadError ? (
+        <p className="text-sm text-destructive">{loadError}</p>
+      ) : products.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t.noProductsYet}</p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {products.map((p, i) => (
+          {products.map((p) => (
             <li
-              key={i}
+              key={p.id}
               className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
             >
-              <span className="font-medium">{p.name_ar}</span>
-              <span className="flex items-center gap-2">
-                <span className="tabular text-muted-foreground">
-                  {p.price_lbp ? `${p.price_lbp} ل.ل.` : "—"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onChange(products.filter((_, j) => j !== i))}
-                  className="text-destructive hover:underline"
-                >
-                  {t.remove}
-                </button>
+              <span className="font-medium text-foreground">{p.name_ar}</span>
+              <span className="tabular text-muted-foreground">
+                {p.price_lbp ? `${p.price_lbp} ل.ل.` : "—"}
               </span>
             </li>
           ))}
@@ -278,13 +334,8 @@ function ProductsStep({
             type="number"
             inputMode="numeric"
             min={0}
-            value={draft.price_lbp ?? ""}
-            onChange={(e) =>
-              setDraft({
-                ...draft,
-                price_lbp: e.target.value ? Number(e.target.value) : null,
-              })
-            }
+            value={draft.price_lbp}
+            onChange={(e) => setDraft({ ...draft, price_lbp: e.target.value })}
           />
           <Field
             name="price_usd"
@@ -293,23 +344,33 @@ function ProductsStep({
             inputMode="decimal"
             min={0}
             step="0.01"
-            value={draft.price_usd ?? ""}
-            onChange={(e) =>
-              setDraft({ ...draft, price_usd: e.target.value || null })
-            }
+            value={draft.price_usd}
+            onChange={(e) => setDraft({ ...draft, price_usd: e.target.value })}
           />
         </div>
+        <Field
+          name="quantity"
+          label={t.initialStock}
+          type="number"
+          inputMode="numeric"
+          min={0}
+          value={draft.quantity}
+          onChange={(e) => setDraft({ ...draft, quantity: e.target.value })}
+        />
         <Toggle
           label={t.isAvailable}
           checked={draft.is_available}
           onChange={(v) => setDraft({ ...draft, is_available: v })}
         />
+        {addError && <p className="text-sm text-destructive">{addError}</p>}
         <Button
           type="button"
-          onClick={addDraft}
+          onClick={addProduct}
+          loading={adding}
+          disabled={!draft.name_ar.trim()}
           className="bg-card !text-primary ring-1 ring-primary/40"
         >
-          {t.addProduct}
+          {adding ? t.addingProduct : t.addProduct}
         </Button>
       </div>
     </div>
