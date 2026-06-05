@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../auth/context";
 import { planLabel, t } from "../i18n";
-import { NAV_ITEMS } from "../nav";
+import { BOTTOM_NAV_ITEMS, NAV_ITEMS } from "../nav";
 import { LogoutIcon } from "./icons";
 import { SetupBanner } from "./SetupBanner";
 
@@ -109,7 +109,7 @@ export function AppShell() {
 
       {/* ----- Bottom nav (mobile) ----- */}
       <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:hidden">
-        {NAV_ITEMS.map(({ to, label, Icon }) => (
+        {BOTTOM_NAV_ITEMS.map(({ to, label, Icon }) => (
           <NavLink
             key={to}
             to={to}

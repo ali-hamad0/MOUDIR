@@ -38,6 +38,7 @@ export const t = {
   navOrders: "الطلبات",
   navCustomers: "الزباين",
   navInventory: "المخزون",
+  navReorders: "موافقات الشرا",
   navSetup: "ضبط المحل",
   // App shell / whoami
   shop: "المحل",
@@ -142,6 +143,40 @@ export const t = {
   mustBeZeroOrMore: "لازم يكون رقم صفر أو أكتر.",
   inventorySaved: "تحفظت الكمية.",
   inventorySaveError: "ما قدرنا نحفظ. جرّب مرة تانية.",
+  // ---- Owner approvals inbox (reorder POs) ----
+  reordersTitle: "موافقات طلبات الشرا",
+  reordersError: "ما قدرنا نجيب طلبات الشرا.",
+  // Empty state copy is given verbatim in the Phase 4 spec.
+  reordersEmpty: "ما في طلبات شراء بانتظار الموافقة",
+  manualQueueTitle: "بدّن إرسال يدوي",
+  poProduct: "المنتج",
+  poQuantity: "الكمية المقترحة",
+  poSupplier: "المورّد",
+  poAgentNote: "ملاحظة المساعد للمورّد",
+  poNoSupplier: "بدون مورّد",
+  poDraftReason: "سبب الطلب",
+  poDispatchError: "سبب فشل الإرسال",
+  // PO status labels
+  poStatusDraft: "بانتظار الموافقة",
+  poStatusApproved: "تمت الموافقة",
+  poStatusSent: "تبعت",
+  poStatusRejected: "مرفوض",
+  poStatusFailed: "فشل الإرسال",
+  // Actions
+  poApprove: "وافق",
+  poReject: "ارفض",
+  poApproveNoteLabel: "ملاحظة (اختياري)",
+  poApproveConfirm: "وافق وابعت",
+  poRejectReasonLabel: "سبب الرفض",
+  poRejectConfirm: "ارفض الطلب",
+  poMarkSent: "علّمه مبعوت",
+  poRetry: "جرّب الإرسال مرة تانية",
+  // Toasts
+  poApproved: "تمت الموافقة — عم نبعت للمورّد.",
+  poRejected: "ترفض طلب الشرا.",
+  poMarkedSent: "تعلّم الطلب إنه مبعوت.",
+  poActionError: "ما قدرنا نكمّل العملية. جرّب مرة تانية.",
+  poRejectReasonRequired: "لازم تكتب سبب الرفض.",
   // Pagination
   prevPage: "السابق",
   nextPage: "التالي",
@@ -243,5 +278,26 @@ export function statusMeta(status: string): { label: string; cls: string } {
     case "confirmed":
     default:
       return { label: t.statusConfirmed, cls: "bg-accent/15 text-accent" };
+  }
+}
+
+/**
+ * Purchase-order status → Arabic label + a Tailwind class pair, for the owner
+ * approvals inbox. Color is always paired with the text label (and a dot in the
+ * UI), never used alone (a11y color-not-only).
+ */
+export function poStatusMeta(status: string): { label: string; cls: string } {
+  switch (status) {
+    case "approved":
+      return { label: t.poStatusApproved, cls: "bg-accent/15 text-accent" };
+    case "sent":
+      return { label: t.poStatusSent, cls: "bg-muted text-muted-foreground" };
+    case "rejected":
+      return { label: t.poStatusRejected, cls: "bg-destructive/10 text-destructive" };
+    case "dispatch_failed":
+      return { label: t.poStatusFailed, cls: "bg-destructive/10 text-destructive" };
+    case "draft":
+    default:
+      return { label: t.poStatusDraft, cls: "bg-status-pending/15 text-status-pending" };
   }
 }
