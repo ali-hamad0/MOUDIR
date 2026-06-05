@@ -62,6 +62,16 @@ class Settings(BaseSettings):
     # tenant per pass. Poll-based for now; Phase 8 may move to a durable queue.
     worker_poll_seconds: float = Field(default=5.0)
     worker_batch_size: int = Field(default=10)
+
+    # Embeddings + RAG (Phase 5). Provider-agnostic like the OCR/mail seams:
+    # "stub" returns deterministic hashed pseudo-vectors for CI/tests (offline, no
+    # network, no key — the default); "gemini" calls Google's embedding model (keyed
+    # by the existing gemini_api_key from Vault — no new secret). The dimension MUST
+    # match the model: text-embedding-004 is 768-d, and it must equal the pgvector
+    # column width (a migration is needed to change it).
+    embedding_mode: str = Field(default="stub")  # "stub" | "gemini"
+    embedding_model: str = Field(default="models/text-embedding-004")
+    embedding_dim: int = Field(default=768)
     # GCP service-account JSON for Cloud Vision — RESOLVED FROM VAULT (modir/ocr),
     # not env. The whole service-account credential is stored as one JSON string and
     # the Vision client is built from it (json.loads → from_service_account_info).

@@ -26,6 +26,7 @@ from app.api import (
 )
 from app.db.session import create_engine
 from app.infra.bill_committer import BillCommitter
+from app.infra.embeddings import build_embedding_client
 from app.infra.logging import configure_logging, get_logger
 from app.infra.ocr import build_ocr_engine
 from app.infra.settings import Settings, get_settings
@@ -116,7 +117,17 @@ async def lifespan(app: FastAPI):
     # structures that text (constitution IV). The provider SDK stays confined to
     # app/infra/ocr/cloud_vision.py.
     app.state.ocr_engine = build_ocr_engine(settings)
-    log.info("modir.agents.ready", langsmith=settings.langsmith_tracing, ocr_mode=settings.ocr_mode)
+    # Embedding client (Phase 5 RAG). Provider-agnostic, built once here; `stub` for
+    # dev/CI (offline), `gemini` for the real embedder (keyed by the existing Vault
+    # gemini_api_key). The worker (Task 5.15) embeds knowledge_base_docs + committed
+    # bills with it; the OrderAgent's search tool (Task 5.16) embeds the query.
+    app.state.embedding_client = build_embedding_client(settings)
+    log.info(
+        "modir.agents.ready",
+        langsmith=settings.langsmith_tracing,
+        ocr_mode=settings.ocr_mode,
+        embedding_mode=settings.embedding_mode,
+    )
 
     # Future: app.state.demand_model = joblib.load(...)
 
