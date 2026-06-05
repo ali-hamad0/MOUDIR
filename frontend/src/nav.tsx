@@ -3,6 +3,7 @@ import { type ComponentType, type SVGProps } from "react";
 import {
   CustomersIcon,
   HomeIcon,
+  InventoryIcon,
   OrdersIcon,
   SetupIcon,
 } from "./components/icons";
@@ -19,6 +20,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { to: "/", label: t.navHome, Icon: HomeIcon },
   { to: "/orders", label: t.navOrders, Icon: OrdersIcon },
+  { to: "/inventory", label: t.navInventory, Icon: InventoryIcon },
   { to: "/customers", label: t.navCustomers, Icon: CustomersIcon },
   { to: "/setup", label: t.navSetup, Icon: SetupIcon },
 ];

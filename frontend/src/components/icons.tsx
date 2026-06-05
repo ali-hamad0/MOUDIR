@@ -56,6 +56,36 @@ export function SetupIcon(props: IconProps) {
   );
 }
 
+export function InventoryIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z" />
+      <path d="M3 7.5 12 12l9-4.5" />
+      <path d="M12 12v9" />
+    </svg>
+  );
+}
+
+// Low-stock indicator — a triangle warning, paired with the Arabic label so the
+// badge never relies on color alone (a11y color-not-only, Phase 3 rule).
+export function AlertIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M10.3 3.6 2.5 17a2 2 0 0 0 1.7 3h15.6a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}
+
+export function CheckIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
 export function LogoutIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
