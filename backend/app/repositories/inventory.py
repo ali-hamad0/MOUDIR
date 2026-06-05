@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import Row, func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.db.models import Inventory, Product
 from app.repositories.base import TenantScopedRepository
@@ -44,6 +45,47 @@ class InventoryRepository(TenantScopedRepository[Inventory]):
         )
         result = await self._session.execute(stmt)
         return result.rowcount == 1
+
+    async def increase(self, tenant_id: UUID, product_id: UUID, qty: int) -> bool:
+        """Atomically ADD `qty` to a product's stock. Returns True on success.
+
+        The mirror of `deduct` for received stock (Phase 5: an approved supplier
+        bill increases inventory, Task 5.11). A single guarded UPDATE — never a
+        read-then-write. There is no oversell concern on an increase (the CHECK
+        quantity >= 0 can't be violated by adding), but it stays one atomic
+        statement so two concurrent increases both apply without losing an update.
+        Returns False only if there is no inventory row for this product/tenant —
+        the caller calls `ensure_row` first (a received bill may be the first stock
+        for a SKU).
+        """
+        stmt = (
+            update(Inventory)
+            .where(
+                Inventory.tenant_id == tenant_id,
+                Inventory.product_id == product_id,
+            )
+            .values(quantity=Inventory.quantity + qty)
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount == 1
+
+    async def ensure_row(self, tenant_id: UUID, product_id: UUID) -> None:
+        """Make sure an inventory row exists for this (tenant, product) at qty 0.
+
+        A received supplier bill can be the FIRST time a SKU enters stock (the owner
+        may not have tracked it yet), so the committer (Task 5.11) calls this before
+        `increase`. Uses INSERT ... ON CONFLICT DO NOTHING on the (tenant_id,
+        product_id) unique constraint so it is race-safe: two concurrent commits
+        can't both insert a duplicate, and an existing row (with its real quantity /
+        thresholds) is left untouched. Tenant-scoped — the row is forced into the
+        caller's tenant, never another's.
+        """
+        stmt = (
+            pg_insert(Inventory)
+            .values(tenant_id=tenant_id, product_id=product_id, quantity=0)
+            .on_conflict_do_nothing(constraint="uq_inventory_tenant_product")
+        )
+        await self._session.execute(stmt)
 
     async def list_low_stock(self, tenant_id: UUID) -> Sequence[Inventory]:
         """Reorder candidates: rows with a threshold set and at/below it.
