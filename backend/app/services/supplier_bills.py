@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.bills import BillRead
 from app.db.models import Product, Supplier, SupplierBill, SupplierBillEvent, SupplierBillLine
+from app.repositories.knowledge_base_docs import KnowledgeBaseDocRepository
 from app.repositories.supplier_bills import REVIEW_STATUSES, SupplierBillRepository
 from app.services.audit import AuditService
 
@@ -373,7 +374,12 @@ class SupplierBillService:
         """The gated BillCommitter applied every validated line to stock:
         `committing` → `committed`. Records the commit time. Audited `bill.committed`.
         Called ONLY by the committer, behind the signed token — never reachable from a
-        status flip alone (constitution V)."""
+        status flip alone (constitution V).
+
+        Also queues the committed bill for embedding into the historical `bills` RAG
+        corpus (Phase 6 forecasting context): a knowledge_base_docs row
+        (source_type='bill', pending) the embedding worker drains (Task 5.15). Reuses
+        the existing tracking + worker path — no extra table. Atomic with the commit."""
         bill = await self._load(tenant_id, bill_id)
         if bill.status != "committing":
             raise InvalidBillTransition(bill_id, bill.status, "commit")
@@ -382,6 +388,12 @@ class SupplierBillService:
         self._event(tenant_id, bill_id, "committed")
         await self._audit.record(
             tenant_id=tenant_id, actor_id=None, action="bill.committed", target=str(bill_id)
+        )
+        # Queue the committed bill for the `bills` corpus. content_hash is the commit
+        # time so a (rare) re-commit re-embeds; a bill commits once, so this is
+        # effectively a one-shot enqueue.
+        await KnowledgeBaseDocRepository(self._session).mark_pending_or_stale(
+            tenant_id, "bill", bill_id, bill.committed_at.isoformat()
         )
         await self._session.flush()
         return bill
