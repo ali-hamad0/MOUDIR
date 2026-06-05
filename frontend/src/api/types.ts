@@ -95,6 +95,38 @@ export interface SupplierRead {
   is_active: boolean;
 }
 
+// ---- Approvals inbox / reorder POs (mirrors app/api/schemas/approvals.py) ----
+
+// One purchase order in the owner's HIL inbox. status walks
+// draft → approved → sent, or draft → rejected, or → dispatch_failed (manual
+// queue). The inbox lists draft + dispatch_failed; approve/reject act on drafts,
+// mark-sent closes a dispatch_failed PO out of band.
+export interface ApprovalRead {
+  id: string;
+  status: string;
+  quantity: number;
+  product_id: string;
+  product_name_ar: string;
+  product_name_en: string | null;
+  supplier_id: string | null;
+  supplier_name: string | null;
+  draft_reason: string | null;
+  agent_note_ar: string | null;
+  reject_reason: string | null;
+  dispatch_error: string | null;
+  dispatch_attempts: number;
+  reviewed_at: string | null;
+  dispatched_at: string | null;
+  created_at: string;
+}
+
+export interface ApprovalsPage {
+  items: ApprovalRead[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 // ---- Customers list (mirrors app/api/schemas/customers.py) ----
 
 export interface CustomerRead {

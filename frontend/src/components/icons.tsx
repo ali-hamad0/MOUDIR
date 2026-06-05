@@ -86,6 +86,17 @@ export function CheckIcon(props: IconProps) {
   );
 }
 
+// Owner approvals inbox — a clipboard with a check (a human-gated reorder).
+export function ApprovalsIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M9 4h6v3H9z" />
+      <path d="M9 5.5H6.5A1.5 1.5 0 0 0 5 7v12.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V7a1.5 1.5 0 0 0-1.5-1.5H15" />
+      <path d="m9 13.5 2 2 4-4" />
+    </svg>
+  );
+}
+
 export function LogoutIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
