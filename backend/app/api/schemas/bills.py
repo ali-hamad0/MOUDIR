@@ -13,7 +13,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class BillRead(BaseModel):
@@ -58,3 +58,79 @@ class BillUploadAccepted(BaseModel):
 
     id: UUID
     status: str
+
+
+class BillLineRead(BaseModel):
+    """One extracted bill line for the review screen, joined to its mapped product
+    (if any). `confidence` flags the line for closer review when low (Task 5.6)."""
+
+    id: UUID
+    raw_text: str | None = None
+    name_ar: str | None = None
+    quantity: Decimal | None = None
+    unit: str | None = None
+    unit_amount: Decimal | None = None
+    line_amount: Decimal | None = None
+    confidence: Decimal | None = None
+    product_id: UUID | None = None
+    product_name_ar: str | None = None
+    committed: bool = False
+
+
+class BillDetail(BaseModel):
+    """The full bill for the review screen: the header fields, a time-boxed presigned
+    image URL (so the owner sees the photo side-by-side), and the extracted lines.
+
+    The image URL is generated server-side from the tenant-prefixed object key — the
+    client never sees or supplies the key (the Wall)."""
+
+    id: UUID
+    status: str
+    supplier_id: UUID | None = None
+    supplier_name: str | None = None
+    original_filename: str | None = None
+    bill_date: date | None = None
+    total_amount: Decimal | None = None
+    currency: str | None = None
+    min_confidence: Decimal | None = None
+    reject_reason: str | None = None
+    reviewed_at: datetime | None = None
+    committed_at: datetime | None = None
+    created_at: datetime
+    image_url: str | None = None
+    lines: list[BillLineRead]
+
+
+class BillLineUpdate(BaseModel):
+    """The owner's correction to one line: edited fields and/or a product mapping.
+
+    `id` identifies the existing line; the other fields overwrite what OCR read.
+    `product_id` is the mapping target (REQUIRED for a line to commit — enforced at
+    approve). A null product_id leaves the line unmapped."""
+
+    id: UUID
+    name_ar: str | None = None
+    quantity: Decimal | None = None
+    unit: str | None = None
+    unit_amount: Decimal | None = None
+    line_amount: Decimal | None = None
+    product_id: UUID | None = None
+
+
+class BillLinesUpdate(BaseModel):
+    """A batch of line corrections the review screen submits."""
+
+    lines: list[BillLineUpdate]
+
+
+class ApproveBillRequest(BaseModel):
+    """Approve a bill (no body fields needed today). Kept as a model so the contract
+    can grow (e.g. an approver note) without changing the route signature. The
+    commit authorization is the signed token minted server-side, never the body."""
+
+
+class RejectBillRequest(BaseModel):
+    """Reject a bill. reason is REQUIRED (a rejection must be explainable — mirrors
+    the PO reject UX). Enforced here AND in the service."""
+
+    reason: str = Field(min_length=1, max_length=1000)

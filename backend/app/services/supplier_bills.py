@@ -28,6 +28,7 @@ send authority — the token is.
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
@@ -36,9 +37,23 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.bills import BillRead
-from app.db.models import Supplier, SupplierBill, SupplierBillEvent, SupplierBillLine
+from app.db.models import Product, Supplier, SupplierBill, SupplierBillEvent, SupplierBillLine
 from app.repositories.supplier_bills import REVIEW_STATUSES, SupplierBillRepository
 from app.services.audit import AuditService
+
+
+@dataclass
+class LineUpdate:
+    """One line correction the API passes to update_lines — a plain domain value so
+    the service does not depend on the API schema. Mirrors BillLineUpdate."""
+
+    id: UUID
+    name_ar: str | None = None
+    quantity: Decimal | None = None
+    unit: str | None = None
+    unit_amount: Decimal | None = None
+    line_amount: Decimal | None = None
+    product_id: UUID | None = None
 
 
 def _to_read(bill: SupplierBill, supplier: Supplier | None) -> BillRead:
@@ -137,6 +152,74 @@ class SupplierBillService:
         )
         items = [_to_read(bill, supplier) for bill, supplier in rows]
         return total, items
+
+    async def get_with_lines(
+        self, *, tenant_id: UUID, bill_id: UUID
+    ) -> tuple[SupplierBill, Supplier | None, list[tuple[SupplierBillLine, Product | None]]]:
+        """The bill + its supplier + its lines (each joined to its mapped product),
+        all tenant-scoped, for the review screen. Raises SupplierBillNotFound if the
+        bill is not this tenant's. The route adds the presigned image URL (storage is
+        an infra concern, kept out of this service)."""
+        bill = await self._load(tenant_id, bill_id)
+        supplier = (
+            await self._suppliers_get(tenant_id, bill.supplier_id)
+            if bill.supplier_id is not None
+            else None
+        )
+        lines = list(await self._repo.get_lines(tenant_id, bill_id))
+        return bill, supplier, lines
+
+    async def _suppliers_get(self, tenant_id: UUID, supplier_id: UUID) -> Supplier | None:
+        from app.repositories.suppliers import SupplierRepository
+
+        return await SupplierRepository(self._session).get(tenant_id, supplier_id)
+
+    async def update_lines(
+        self, *, tenant_id: UUID, bill_id: UUID, updates: list[LineUpdate]
+    ) -> SupplierBill:
+        """Apply the owner's line corrections (edited fields + product mapping).
+
+        Only an `extracted` bill is editable (a committing/committed/rejected bill is
+        a 409 — corrections after the fact are meaningless). Each update targets an
+        existing line of THIS bill (a foreign/other-tenant line id is silently
+        ignored — the Wall: the lines were loaded tenant-scoped). Commits are handled
+        by the caller (the API), like the other write paths here flush-not-commit."""
+        bill = await self._load(tenant_id, bill_id)
+        if bill.status != "extracted":
+            raise InvalidBillTransition(bill_id, bill.status, "edit")
+        rows = await self._repo.get_lines(tenant_id, bill_id)
+        by_id = {line.id: line for line, _product in rows}
+        for upd in updates:
+            line = by_id.get(upd.id)
+            if line is None:
+                continue  # not a line of this tenant's bill — ignore (the Wall)
+            if upd.name_ar is not None:
+                line.name_ar = upd.name_ar
+            if upd.quantity is not None:
+                line.quantity = upd.quantity
+            if upd.unit is not None:
+                line.unit = upd.unit
+            if upd.unit_amount is not None:
+                line.unit_amount = upd.unit_amount
+            if upd.line_amount is not None:
+                line.line_amount = upd.line_amount
+            # product_id is set even when None so the owner can UNMAP a line.
+            line.product_id = upd.product_id
+        self._event(tenant_id, bill_id, "edited", f"{len(updates)} line(s)")
+        await self._session.flush()
+        return bill
+
+    async def all_required_lines_mapped(self, *, tenant_id: UUID, bill_id: UUID) -> bool:
+        """True if every line that can carry stock (a positive quantity) is mapped to
+        a product — the precondition for approve (a bill with an unmapped, quant/-ied
+        line would silently skip stock on commit). A line with no/zero quantity is not
+        required to be mapped."""
+        rows = await self._repo.get_lines(tenant_id, bill_id)
+        for line, _product in rows:
+            qty = line.quantity
+            if qty is not None and qty > 0 and line.product_id is None:
+                return False
+        return True
 
     async def create_uploaded(
         self,
