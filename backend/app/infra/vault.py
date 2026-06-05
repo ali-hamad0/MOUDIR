@@ -45,6 +45,10 @@ def resolve_secrets(settings):
         "minio_secret_key": ("modir/minio", "secret_key"),
         "jwt_secret": ("modir/auth", "jwt_secret"),
         "mail_api_key": ("modir/mail", "api_key"),
+        # GCP service-account JSON for the OCR engine (Phase 5). Seeded as a
+        # placeholder in dev (stub mode ignores it); a real credential is provided
+        # only when ocr_mode=cloud_vision.
+        "ocr_service_account_json": ("modir/ocr", "service_account_json"),
     }
     for field, (path, key) in secrets_map.items():
         from pydantic import SecretStr

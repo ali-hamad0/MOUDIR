@@ -25,6 +25,7 @@ from app.api import (
 )
 from app.db.session import create_engine
 from app.infra.logging import configure_logging, get_logger
+from app.infra.ocr import build_ocr_engine
 from app.infra.settings import Settings, get_settings
 from app.infra.storage import StorageClient
 from app.infra.supplier_dispatch import SupplierDispatcher
@@ -97,7 +98,13 @@ async def lifespan(app: FastAPI):
     # tenant-prefixed keys (the Wall for storage).
     app.state.storage = StorageClient(settings)
     await app.state.storage.ensure_bucket()
-    log.info("modir.agents.ready", langsmith=settings.langsmith_tracing)
+    # OCR engine (Phase 5). Provider-agnostic, built once here and selected by
+    # ocr_mode: `stub` for dev/CI (offline), `cloud_vision` for the real engine. The
+    # worker (Task 5.8) uses it to turn a bill image into text; the LLM only
+    # structures that text (constitution IV). The provider SDK stays confined to
+    # app/infra/ocr/cloud_vision.py.
+    app.state.ocr_engine = build_ocr_engine(settings)
+    log.info("modir.agents.ready", langsmith=settings.langsmith_tracing, ocr_mode=settings.ocr_mode)
 
     # Future: app.state.demand_model = joblib.load(...)
 

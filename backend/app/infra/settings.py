@@ -46,6 +46,19 @@ class Settings(BaseSettings):
     # TTL for the presigned image URL the review screen uses (Task 5.12).
     bill_image_url_ttl_minutes: int = Field(default=15)
 
+    # OCR engine (Phase 5). Provider-agnostic like mail_mode / po_dispatch_mode:
+    # "stub" returns deterministic canned text for CI/tests (offline, no network,
+    # no key — the default); "cloud_vision" calls Google Cloud Vision (better
+    # Lebanese-Arabic accuracy) and is verified on the HOST (Docker DNS is blocked
+    # in-container). "tesseract" is reserved as a documented offline fallback.
+    ocr_mode: str = Field(default="stub")  # "stub" | "cloud_vision" | "tesseract"
+    # GCP service-account JSON for Cloud Vision — RESOLVED FROM VAULT (modir/ocr),
+    # not env. The whole service-account credential is stored as one JSON string and
+    # the Vision client is built from it (json.loads → from_service_account_info).
+    # Empty default means "no credential" (stub/dev); when cloud_vision mode is used
+    # the seed provides it. Keep in sync: vault.py secrets_map AND both seed paths.
+    ocr_service_account_json: SecretStr = Field(default=SecretStr(""))
+
     # Dashboard CORS — the React app (Phase 3) runs on a different origin, so the
     # browser needs explicit cross-origin permission. A typed list, never "*"
     # with credentials (that combination is a security hole the browser itself
