@@ -34,16 +34,23 @@ from app.agents.llm.router import GeminiRouter
 from app.agents.ocr.agent import BillExtractionAgent, ExtractionResult
 from app.db.models import SupplierBillLine
 from app.db.session import create_engine
+from app.infra.embeddings import EmbeddingClient, build_embedding_client
+from app.infra.kb_content import build_kb_text, chunk_text
 from app.infra.logging import configure_logging, get_logger
 from app.infra.ocr import build_ocr_engine, preprocess
 from app.infra.ocr.engine import OCREngine
 from app.infra.settings import Settings, get_settings
 from app.infra.storage import StorageClient
 from app.infra.vault import resolve_secrets
+from app.repositories.knowledge_base_docs import (
+    KnowledgeBaseDocRepository,
+    tenants_with_embeddable_docs,
+)
 from app.repositories.supplier_bills import (
     SupplierBillRepository,
     tenants_with_claimable_bills,
 )
+from app.repositories.vector_chunks import VectorChunkRepository
 from app.services.supplier_bills import SupplierBillService
 
 log = get_logger(__name__)
@@ -184,24 +191,127 @@ class BillProcessor:
             await session.commit()
 
 
-def build_pipeline(settings: Settings) -> BillProcessor:
+@dataclass
+class KnowledgeEmbedder:
+    """Drains `knowledge_base_docs` (pending/stale) into the `knowledge` vector
+    corpus, tenant by tenant — the consumer the tracking layer has waited for since
+    Phase 1/3. Holds the embedding client; opens its own session per unit of work.
+    Separated from the poll loop so it is unit-testable.
+    """
+
+    sessionmaker: async_sessionmaker
+    embedding_client: EmbeddingClient
+    settings: Settings
+
+    async def run_once(self) -> int:
+        """One pass over every tenant with embeddable docs. Returns the count
+        embedded (or handled). Discovers tenants via the one cross-tenant query, then
+        drains each tenant-scoped."""
+        async with self.sessionmaker() as session:
+            tenant_ids = await tenants_with_embeddable_docs(session)
+
+        embedded = 0
+        for tenant_id in tenant_ids:
+            embedded += await self._embed_tenant(tenant_id)
+        return embedded
+
+    async def _embed_tenant(self, tenant_id: UUID) -> int:
+        async with self.sessionmaker() as session:
+            docs = await KnowledgeBaseDocRepository(session).list_embeddable(
+                tenant_id, limit=self.settings.worker_batch_size
+            )
+            work = [(d.id, d.source_type, d.source_id, d.content_hash) for d in docs]
+
+        count = 0
+        for doc_id, source_type, source_id, content_hash in work:
+            await self._embed_one(tenant_id, doc_id, source_type, source_id, content_hash)
+            count += 1
+        return count
+
+    async def _embed_one(
+        self, tenant_id: UUID, doc_id: UUID, source_type: str, source_id: UUID, content_hash
+    ) -> None:
+        """Embed one KB doc: build text → chunk → embed → upsert chunks → mark
+        embedded, all in one tenant-scoped transaction. A failure is logged and the
+        doc is left pending/stale to retry next pass (never crashes the worker).
+
+        A committed supplier bill (source_type='bill') is embedded into the SEPARATE
+        `bills` corpus (Phase 6 forecasting context); everything else goes to the
+        `knowledge` corpus (products/policies/hours). The same tracking row + drain
+        path serves both — no extra table."""
+        corpus = "bills" if source_type == "bill" else "knowledge"
+        try:
+            async with self.sessionmaker() as session:
+                text = await build_kb_text(session, tenant_id, source_type, source_id)
+                vectors_repo = VectorChunkRepository(session)
+                kb_repo = KnowledgeBaseDocRepository(session)
+
+                if text is None:
+                    # The source vanished — drop any prior chunks, mark the doc handled.
+                    await vectors_repo.delete_source(
+                        tenant_id,
+                        corpus=corpus,
+                        source_type=source_type,
+                        source_id=source_id,
+                    )
+                    await kb_repo.mark_embedded(tenant_id, doc_id)
+                    await session.commit()
+                    return
+
+                chunks = chunk_text(text)
+                embeddings = await self.embedding_client.embed(chunks)
+                await vectors_repo.upsert_chunks(
+                    tenant_id,
+                    corpus=corpus,
+                    source_type=source_type,
+                    source_id=source_id,
+                    content_hash=content_hash,
+                    chunks=list(zip(chunks, embeddings, strict=True)),
+                )
+                await kb_repo.mark_embedded(tenant_id, doc_id)
+                await session.commit()
+            log.info(
+                "worker.kb.embedded",
+                tenant_id=str(tenant_id),
+                corpus=corpus,
+                source_type=source_type,
+                source_id=str(source_id),
+                chunks=len(chunks),
+            )
+        except Exception as exc:  # noqa: BLE001 — leave pending/stale to retry
+            log.warning(
+                "worker.kb.failed",
+                tenant_id=str(tenant_id),
+                source_type=source_type,
+                source_id=str(source_id),
+                error=f"{type(exc).__name__}: {exc}",
+            )
+
+
+def build_pipeline(settings: Settings) -> tuple[BillProcessor, KnowledgeEmbedder]:
     """Construct the worker's singletons the SAME way `lifespan` builds the api's.
 
-    The engine, router, OCR engine, bill agent, and storage are all built once here
-    (constitution IV: agents/models load once). Returns a BillProcessor wired with
-    its own sessionmaker. (Storage bucket is ensured by the api at startup; the worker
-    only reads, so it does not re-ensure.)
+    The engine, router, OCR engine, bill agent, storage, and embedding client are all
+    built once here (constitution IV: agents/models load once). Returns the OCR bill
+    processor and the KB embedder, sharing one sessionmaker. (Storage bucket is ensured
+    by the api at startup; the worker only reads, so it does not re-ensure.)
     """
     engine = create_engine()
     sessionmaker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     router = GeminiRouter(settings)
-    return BillProcessor(
+    processor = BillProcessor(
         sessionmaker=sessionmaker,
         storage=StorageClient(settings),
         ocr_engine=build_ocr_engine(settings),
         bill_agent=BillExtractionAgent(router, settings, sessionmaker),
         settings=settings,
     )
+    embedder = KnowledgeEmbedder(
+        sessionmaker=sessionmaker,
+        embedding_client=build_embedding_client(settings),
+        settings=settings,
+    )
+    return processor, embedder
 
 
 async def run_worker() -> None:
@@ -213,9 +323,14 @@ async def run_worker() -> None:
     """
     configure_logging()
     settings = resolve_secrets(get_settings())
-    log.info("worker.startup", ocr_mode=settings.ocr_mode, poll=settings.worker_poll_seconds)
+    log.info(
+        "worker.startup",
+        ocr_mode=settings.ocr_mode,
+        embedding_mode=settings.embedding_mode,
+        poll=settings.worker_poll_seconds,
+    )
 
-    processor = build_pipeline(settings)
+    processor, embedder = build_pipeline(settings)
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -229,9 +344,10 @@ async def run_worker() -> None:
 
     while not stop.is_set():
         try:
-            n = await processor.run_once()
-            if n:
-                log.info("worker.pass.done", processed=n)
+            bills = await processor.run_once()
+            docs = await embedder.run_once()
+            if bills or docs:
+                log.info("worker.pass.done", bills=bills, docs=docs)
         except Exception as exc:  # noqa: BLE001 — never let one pass kill the loop
             log.error("worker.pass.error", error=f"{type(exc).__name__}: {exc}")
         try:
