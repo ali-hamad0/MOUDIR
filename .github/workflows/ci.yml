@@ -69,11 +69,13 @@ jobs:
       - name: Run tests
         working-directory: ./backend
         # The whole tests/ tree runs, so new suites are picked up automatically —
-        # including the Phase 4 inventory-deduction (atomicity, oversell race,
-        # tenant isolation) and HIL purchase-order suites (no-send-without-token,
-        # approve→dispatch, reject, retry→manual, audit, Wall). The LLM is mocked
-        # and the supplier webhook is stubbed, so the suite stays offline; the
-        # live smoke test is deselected as before.
+        # Phase 4's inventory-deduction + HIL purchase-order suites, and Phase 5's
+        # OCR pipeline (extraction, confidence, ocr_failed, the storage Wall), the
+        # bill→stock HIL (no-commit-without-token, approve→increase, reject, Wall,
+        # audit), and the RAG suites (vector store tenant-filter-before-similarity,
+        # the embedding worker, OrderAgent search_knowledge_base). The LLM is mocked,
+        # OCR + embeddings use the offline stubs, and the supplier webhook is
+        # stubbed, so the suite stays offline; the live smoke test is deselected.
         run: uv run pytest tests -v
 
       - name: Forbidden patterns check
@@ -93,10 +95,13 @@ jobs:
       - name: Provider-SDK boundary check
         run: |
           # Constitution: application code never imports a provider SDK directly.
-          # The LLM provider SDK is allowed ONLY inside app/agents/llm/ (the router
-          # boundary). Anywhere else in app/ is a violation — in particular the
-          # Phase 4 InventoryAgent reaches the model through the router's tier1(),
-          # never the SDK, so app/agents/inventory/ must stay clean here.
+          # The Google GenAI SDK is allowed ONLY inside app/agents/llm/ (the router
+          # boundary). Anywhere else in app/ is a violation — the Phase 4
+          # InventoryAgent reaches the model through the router's tier1(), and the
+          # Phase 5 RAG embedder lives at app/agents/llm/gemini_embeddings.py (NOT
+          # app/infra/), so both stay inside this boundary; the OCR engine's Vision
+          # SDK is confined to app/infra/ocr/cloud_vision.py and checked by its own
+          # unit test (test_ocr_engine), separate from this LLM-SDK gate.
           offenders=$(grep -rln --include="*.py" \
             "langchain_google_genai\|google.generativeai\|google.genai" backend/app/ \
             | grep -v "backend/app/agents/llm/") || true
@@ -144,10 +149,23 @@ jobs:
             exit 1
           fi
 
+  # The OCR worker (Phase 5) runs the SAME image as the api, a different entrypoint
+  # (python -m app.worker). Build that image to prove it still builds and that the
+  # worker module imports cleanly inside it — the worker is part of the deployable
+  # surface now, not just the api.
+  worker-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend image (api + worker share it)
+        run: docker build -t modir-backend ./backend
+      - name: Worker entrypoint imports in the image
+        run: docker run --rm modir-backend python -c "import app.worker"
+
   # The dashboard is its own deployable; lint, typecheck, and build it
   # independently of the backend job. A type error or build failure fails CI.
-  # Covers the Phase 4 additions — the inventory view and the owner approvals
-  # inbox — alongside the earlier Phase 3 pages.
+  # Covers the Phase 5 additions — the bills list, the upload control, and the
+  # bill-review screen — alongside the earlier Phase 3/4 pages.
   frontend:
     runs-on: ubuntu-latest
     defaults:
