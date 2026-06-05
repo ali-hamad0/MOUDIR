@@ -1,9 +1,12 @@
-from datetime import datetime, time
+from datetime import date, datetime, time
+from decimal import Decimal
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -14,6 +17,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -456,6 +460,147 @@ class PurchaseOrderEvent(Base):
     )
     purchase_order_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("purchase_orders.id"), nullable=True, index=True
+    )
+    event: Mapped[str] = mapped_column(String(64), nullable=False)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+# ── Phase 5 — Supplier bills (OCR artifact) ─────────────────────────────────
+
+
+class SupplierBill(Base):
+    """A photographed paper supplier bill and its OCR lifecycle (the OCR artifact).
+
+    The Wall (constitution I): non-nullable, indexed tenant_id; every repository
+    method filters by it. The image itself lives in MinIO under a tenant-prefixed
+    key (`object_key`, app/infra/storage.py) — `object_key` here is just the
+    reference; the bytes never sit in the database. References the tenant's own
+    `suppliers` row (nullable — the supplier may be unknown until extraction).
+
+    Status lifecycle (single source of truth for the gate + UI)::
+
+        uploaded ──worker picks up──► ocr_processing ──OCR+extract ok──► extracted
+                       │                                                    │
+                       └──OCR/extract fails──► ocr_failed                   │
+                                                                           │ human reviews
+                       committed ◄──approve(signed bill.commit token)──────┤
+                                                                           │
+                       rejected  ◄──reject(reason)─────────────────────────┘
+
+    - uploaded       — the file is in MinIO; the worker has not started. NO stock change.
+    - ocr_processing — the worker is running OCR + extraction.
+    - extracted      — BillData is ready; the draft awaiting a human. NO stock change.
+    - ocr_failed     — OCR/extraction failed; surfaced for retry / manual entry.
+    - committed      — a human approved; a signed bill.commit token cleared the gate
+                       and every validated line increased stock. Terminal.
+    - rejected       — a human declined; carries reject_reason. Image stays in MinIO.
+
+    ⚠️ Like the PurchaseOrder, `status` is the lifecycle MARKER for the UI — it is
+    NOT the security gate. Committing a bill to stock is a Level-2 action gated by a
+    signed `bill.commit` token verified by ActionGate (Task 5.11), the SAME gate as
+    the purchase-order dispatch (a new action string, not a new gate). A bug that
+    flips `status` to "committed" must still not move stock without a valid token
+    (constitution V).
+    """
+
+    __tablename__ = "supplier_bills"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    # The supplier the bill is from. Nullable: unknown until extraction maps it (and
+    # the owner may never map it). Tenant-scoped — never another tenant's supplier.
+    supplier_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("suppliers.id"), nullable=True
+    )
+    # The MinIO object key (tenant-prefixed). The reference, not the bytes.
+    object_key: Mapped[str] = mapped_column(Text, nullable=False)
+    original_filename: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="uploaded")
+    # Which OCR engine produced the text (stub | cloud_vision | tesseract) — recorded
+    # for audit/repro since accuracy differs by engine.
+    ocr_engine: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # The raw OCR output, kept so a bill can be re-extracted without re-OCR'ing.
+    ocr_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The validated BillData structure (the extraction agent's output). JSONB so the
+    # whole structured result is queryable without a column per field.
+    extracted: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # Parsed from the bill (best-effort; may be null on a low-confidence extraction).
+    bill_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    total_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    # The currency as printed on the bill ("LBP" | "USD").
+    currency: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # The lowest per-field confidence on the bill — the review signal that tells the
+    # UI which bills need closer attention (Task 5.6). NOT an auto-commit switch:
+    # every bill goes to a human in Phase 5.
+    min_confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3), nullable=True)
+    # The approver/rejecter — a user of THIS tenant. Null until reviewed.
+    reviewed_by: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Required on reject (enforced in the service/API, Task 5.3/5.12).
+    reject_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SupplierBillLine(Base):
+    """One extracted line of a supplier bill, mapped (or not) to a product.
+
+    The Wall (constitution I): non-nullable, indexed tenant_id; every repository
+    method filters by it. References the ONE `products` table for its mapping target
+    (nullable: a line is unmapped until the owner maps it in review, and an unmapped
+    line can never commit to stock — Task 5.11). It does NOT copy the catalog.
+
+    `committed` records whether THIS line applied to stock when the bill was
+    committed, so a partially-actioned bill (some lines mapped, some not) is
+    auditable line by line.
+    """
+
+    __tablename__ = "supplier_bill_lines"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    supplier_bill_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("supplier_bills.id"), nullable=False, index=True
+    )
+    # The OCR'd line exactly as read — kept so the owner can compare against the
+    # parsed fields in the review screen.
+    raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The extracted item name (Lebanese Arabic). Drives the product mapping.
+    name_ar: Mapped[str | None] = mapped_column(Text, nullable=True)
+    quantity: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    unit_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    line_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    # Per-line confidence (0..1) — flags the line for review when low (Task 5.6).
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(4, 3), nullable=True)
+    # The mapped catalog target for THIS tenant. Null = unmapped (cannot commit).
+    product_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("products.id"), nullable=True, index=True
+    )
+    # Did this line apply to stock on commit? Stays False for unmapped/skipped lines.
+    committed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class SupplierBillEvent(Base):
+    """Lightweight per-bill trail (uploaded, ocr_processing, extracted, committed...).
+
+    Mirrors OrderEvent / PurchaseOrderEvent: the cross-cutting audit_log records
+    tenant-level events via AuditService; this table keeps bill-specific breadcrumbs
+    close to the bill. `supplier_bill_id` is nullable for the same reason
+    OrderEvent.order_id is — a breadcrumb can outlive its row.
+    """
+
+    __tablename__ = "supplier_bill_events"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    supplier_bill_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("supplier_bills.id"), nullable=True, index=True
     )
     event: Mapped[str] = mapped_column(String(64), nullable=False)
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
