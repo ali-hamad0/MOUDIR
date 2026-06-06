@@ -60,14 +60,21 @@ class TrainingDataRepository(TenantScopedRepository[Order]):
     model = Order
 
     async def daily_product_demand(
-        self, tenant_id: UUID, *, start: date | None = None, end: date | None = None
+        self,
+        tenant_id: UUID,
+        *,
+        product_id: UUID | None = None,
+        start: date | None = None,
+        end: date | None = None,
     ) -> Sequence[Row[tuple[UUID, date, int]]]:
         """Units sold per product per Beirut day: rows of (product_id, day, units).
 
         Sums OrderItem.quantity grouped by product and day. The OrderItem→Order JOIN is
         scoped on BOTH sides by tenant_id. Ordered by (product, day) so a per-product
         time series is contiguous for the feature builder. `start`/`end` (inclusive
-        start, exclusive end) bound the window; omit them for all history.
+        start, exclusive end) bound the window; omit them for all history. `product_id`
+        narrows to a single product's series — what the serving path needs to forecast
+        one product's reorder (Task 6.7) without pulling the whole catalog.
         """
         day = _beirut_day(Order.created_at).label("day")
         stmt = (
@@ -84,6 +91,8 @@ class TrainingDataRepository(TenantScopedRepository[Order]):
             .group_by(OrderItem.product_id, day)
             .order_by(OrderItem.product_id, day)
         )
+        if product_id is not None:
+            stmt = stmt.where(OrderItem.product_id == product_id)
         stmt = self._bound_window(stmt, start, end)
         return (await self._session.execute(stmt)).all()
 

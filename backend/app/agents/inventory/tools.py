@@ -8,7 +8,8 @@ crashes. The PO it writes is a `draft` — it NEVER sends (the human gate, 4.10/
 governs every send).
 """
 
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from uuid import UUID
 
 from langchain_core.messages import SystemMessage
@@ -20,6 +21,7 @@ from app.agents.llm.router import LLMRouter
 from app.db.models import Inventory, PurchaseOrder
 from app.infra.logging import get_logger
 from app.infra.settings import Settings
+from app.ml.predictors import DemandPredictor, StubDemandPredictor
 from app.repositories.inventory import InventoryRepository
 from app.services.purchase_orders import PurchaseOrderService
 from prompts import inventory_agent_ar
@@ -40,12 +42,20 @@ class ToolContext:
     flow there is no customer/owner WhatsApp identity here — the InventoryAgent
     acts on the SYSTEM's behalf (a reaction to stock dropping), so the context is
     just the tenant scope plus the session/router/settings. Passing this (not a
-    bare session) keeps every tool inside the Wall."""
+    bare session) keeps every tool inside the Wall.
+
+    `demand_predictor` is the Phase 6 seam (lifespan-loaded, served via DI — AD-6.5);
+    it defaults to the offline stub so existing callers/tests need no change.
+    `demand_history` is this product's daily-demand series, PRE-FETCHED tenant-scoped
+    by `draft_for_low_stock` (an async DB read) so the sync `forecast_demand` can feed
+    it to the predictor without awaiting — keeping the prediction inside the Wall."""
 
     session: AsyncSession
     tenant_id: UUID
     router: LLMRouter
     settings: Settings
+    demand_predictor: DemandPredictor = field(default_factory=StubDemandPredictor)
+    demand_history: Sequence = field(default_factory=tuple)
 
 
 async def check_stock(ctx: ToolContext, product_id: UUID) -> Inventory | None:
@@ -65,13 +75,29 @@ async def check_stock(ctx: ToolContext, product_id: UUID) -> Inventory | None:
 
 
 def forecast_demand(ctx: ToolContext, inventory: Inventory) -> int:
-    """Suggest a reorder quantity. **PLACEHOLDER — no ML (constitution IV).**
+    """Suggest a reorder quantity, backed by the trained demand model (Phase 6).
 
-    Phase 6 replaces this with a trained demand model behind this exact signature,
-    so no caller changes. For now it is deterministic: use the owner's configured
-    `reorder_quantity` if set, else a documented fixed default. Always returns a
-    positive integer (a draft with quantity 0 would be meaningless).
+    Same EXACT sync signature it has always had (AD-6.5): the predictor is reached via
+    `ctx` and `predict` on one row is fast CPU work, so no caller changes. The model
+    forecasts next-day demand for this product from `ctx.demand_history` (pre-fetched,
+    tenant-scoped). When the model has a signal we use it; otherwise — a brand-new
+    product with no history, or the offline stub in CI/dev — we fall back to the SAME
+    documented default as before: the owner's configured `reorder_quantity`, else a
+    fixed default. Always returns a positive integer (a draft of 0 would be meaningless).
     """
+    predicted = ctx.demand_predictor.predict_quantity(
+        ctx.tenant_id, inventory.product_id, ctx.demand_history
+    )
+    if predicted is not None and predicted > 0:
+        log.info(
+            "tool.forecast_demand",
+            tenant_id=str(ctx.tenant_id),
+            product_id=str(inventory.product_id),
+            suggested=predicted,
+            source="model",
+        )
+        return predicted
+
     qty = inventory.reorder_quantity if inventory.reorder_quantity else DEFAULT_REORDER_QTY
     suggested = max(1, qty)
     log.info(

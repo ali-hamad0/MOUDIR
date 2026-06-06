@@ -93,10 +93,21 @@ async def lifespan(app: FastAPI):
     app.state.order_agent = OrderAgent(
         app.state.llm_router, settings, sessionmaker, app.state.embedding_client
     )
+    # Demand predictor (Phase 6, Task 6.6). Loaded ONCE here (Constitution IV.5:
+    # joblib.load lives in lifespan, NEVER in a route) and served via app.state DI.
+    # The factory returns the trained predictor when ml_mode="trained" and the artifact
+    # + card are present, else the offline stub — the CI/dev default, exactly like
+    # ocr_mode/embedding_mode. A missing artifact degrades to the stub (logged), never
+    # crashing startup. Built before the InventoryAgent so it can be injected into it.
+    app.state.demand_predictor = build_demand_predictor(settings)
+    log.info("modir.ml.demand_predictor.ready", ml_mode=settings.ml_mode)
     # The InventoryAgent mirrors the OrderAgent: built once, opens its own session
     # per call. Task 4.9 reaches it via app.state.inventory_agent to draft a reorder
-    # PO inline when order completion drops stock below threshold.
-    app.state.inventory_agent = InventoryAgent(app.state.llm_router, settings, sessionmaker)
+    # PO inline when order completion drops stock below threshold. Task 6.7 hands it the
+    # demand predictor so forecast_demand's reorder quantity comes from the trained model.
+    app.state.inventory_agent = InventoryAgent(
+        app.state.llm_router, settings, sessionmaker, app.state.demand_predictor
+    )
     # The BillExtractionAgent mirrors the other agents: built once, opens its own
     # session per call. The OCR worker (Task 5.8) reaches it via
     # app.state.bill_agent to structure an uploaded bill's OCR text into a BillData.
@@ -130,16 +141,8 @@ async def lifespan(app: FastAPI):
         langsmith=settings.langsmith_tracing,
         ocr_mode=settings.ocr_mode,
         embedding_mode=settings.embedding_mode,
+        ml_mode=settings.ml_mode,
     )
-
-    # Demand predictor (Phase 6, Task 6.6). Loaded ONCE here (Constitution IV.5:
-    # joblib.load lives in lifespan, NEVER in a route) and served via app.state DI.
-    # The factory returns the trained predictor when ml_mode="trained" and the artifact
-    # + card are present, else the offline stub — the CI/dev default, exactly like
-    # ocr_mode/embedding_mode. A missing artifact degrades to the stub (logged), never
-    # crashing startup. Task 6.7 reaches it from the InventoryAgent via ToolContext.
-    app.state.demand_predictor = build_demand_predictor(settings)
-    log.info("modir.ml.demand_predictor.ready", ml_mode=settings.ml_mode)
 
     yield
 
