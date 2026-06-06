@@ -1,0 +1,4 @@
+# Trained model artifacts (Phase 6, AD-6.4): *.joblib + model_card.json.
+# Small artifacts ARE committed so the lifespan and the CI golden-eval job load real
+# models (a Colab-trained artifact is re-inserted via a normal PR). This .gitkeep
+# keeps the directory present before any model is trained.

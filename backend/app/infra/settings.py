@@ -79,6 +79,18 @@ class Settings(BaseSettings):
     # the seed provides it. Keep in sync: vault.py secrets_map AND both seed paths.
     ocr_service_account_json: SecretStr = Field(default=SecretStr(""))
 
+    # ML layer (Phase 6). Provider-agnostic like the OCR/embedding seams:
+    # "stub" returns deterministic, offline predictions needing no trained artifact —
+    # the CI/dev DEFAULT, so the suite runs offline with no .joblib committed; "trained"
+    # loads the real pipelines from app/ml/artifacts/ at startup (lifespan, once) and
+    # serves them through DI. A missing artifact under "trained" degrades to the stub
+    # (logged), never crashes the api. Artifact FILENAMES are config so a retrain can
+    # version them without touching code; they resolve under app/ml/artifacts/.
+    ml_mode: str = Field(default="stub")  # "stub" | "trained"
+    ml_demand_artifact: str = Field(default="demand.joblib")
+    ml_churn_artifact: str = Field(default="churn.joblib")
+    ml_anomaly_artifact: str = Field(default="anomaly.joblib")
+
     # Dashboard CORS — the React app (Phase 3) runs on a different origin, so the
     # browser needs explicit cross-origin permission. A typed list, never "*"
     # with credentials (that combination is a security hole the browser itself
