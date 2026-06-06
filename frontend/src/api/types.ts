@@ -252,3 +252,40 @@ export interface PolicyUpsert {
   key: string;
   value?: string | null;
 }
+
+// ---- ML predictions (mirrors app/api/schemas/predictions.py) ----
+// `mode` is "trained" | "stub" (honesty marker); a null value means "no signal".
+
+export interface DemandPrediction {
+  product_id: string;
+  predicted_units: number | null;
+}
+
+export interface DemandPredictions {
+  as_of: string;
+  mode: string;
+  items: DemandPrediction[];
+}
+
+export interface ChurnPrediction {
+  customer_id: string;
+  risk: number | null; // probability in [0, 1]
+}
+
+export interface ChurnPredictions {
+  as_of: string;
+  mode: string;
+  items: ChurnPrediction[];
+}
+
+export interface AnomalyDay {
+  day: string;
+  revenue_lbp: number;
+  is_anomalous: boolean | null;
+}
+
+export interface AnomalyPredictions {
+  as_of: string;
+  mode: string;
+  items: AnomalyDay[];
+}

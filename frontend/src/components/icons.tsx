@@ -108,6 +108,16 @@ export function BillsIcon(props: IconProps) {
   );
 }
 
+// Insights — a line chart trending up (the ML predictions panel).
+export function InsightsIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M4 4v15a1 1 0 0 0 1 1h15" />
+      <path d="m7 14 3.5-4 3 2.5L20 6" />
+    </svg>
+  );
+}
+
 export function LogoutIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
