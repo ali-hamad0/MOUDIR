@@ -14,6 +14,9 @@ the modelling is pure pandas/sklearn. Colab skips these and loads the exported C
 instead ([[phase6-ml-colab-decision]]).
 """
 
+from collections.abc import Sequence
+from datetime import date
+
 import pandas as pd
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -72,14 +75,19 @@ async def load_anomaly_dataset(
 async def load_churn_dataset(
     sessionmaker: async_sessionmaker,
     *,
-    as_of,
+    as_ofs: Sequence[date],
     horizon_days: int = churn.DEFAULT_HORIZON_DAYS,
     min_orders: int = MIN_ORDERS_TO_TRAIN,
 ) -> pd.DataFrame:
-    """Stacked churn features+label across all trainable tenants at one cutoff.
+    """Stacked churn features+label across all trainable tenants at SEVERAL cutoffs.
 
-    `as_of` is required (the label is defined relative to it). One row per customer with
-    a past order; the `churned` column is the label.
+    `as_ofs` is required (the `churned` label is defined relative to each cutoff). One row
+    per (customer, cutoff) for customers with a PAST order at that cutoff — so the same
+    customer contributes several rows over time (still active early → churned later),
+    giving the classifier temporal variety and more rows than a single snapshot. Each
+    tenant's orders are fetched ONCE (tenant-scoped — the Wall) and the leakage-free
+    features are rebuilt per cutoff (features strictly before the cutoff, label in its
+    forward window — AD-6.6).
     """
     frames: list[pd.DataFrame] = []
     async with sessionmaker() as session:
@@ -87,11 +95,12 @@ async def load_churn_dataset(
     for tenant_id in tenant_ids:
         async with sessionmaker() as session:
             rows = await TrainingDataRepository(session).customer_orders(tenant_id)
-        feats = churn.build_churn_features(rows, as_of=as_of, horizon_days=horizon_days)
-        if not feats.empty:
-            frames.append(feats)
+        for as_of in as_ofs:
+            feats = churn.build_churn_features(rows, as_of=as_of, horizon_days=horizon_days)
+            if not feats.empty:
+                frames.append(feats)
     out = _concat(frames)
-    log.info("ml.dataset.churn", tenants=len(tenant_ids), rows=len(out), as_of=str(as_of))
+    log.info("ml.dataset.churn", tenants=len(tenant_ids), rows=len(out), cutoffs=len(as_ofs))
     return out
 
 

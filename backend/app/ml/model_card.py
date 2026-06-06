@@ -26,6 +26,10 @@ class ModelCard:
     n_rows: int
     n_tenants: int
     data_source: str = "synthetic"
+    # Free-form secondary metrics — e.g. the churn model's PER-CLASS precision/recall/F1
+    # (the imbalanced problem can't be judged on one number). Defaults empty so older
+    # cards (demand) still load. The demand card leaves it empty; churn fills it.
+    extra: dict = field(default_factory=dict)
     notes: str = ""
     trained_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
