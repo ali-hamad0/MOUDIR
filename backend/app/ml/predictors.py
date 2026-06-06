@@ -17,6 +17,8 @@ The concrete trained predictors live in `app/ml/<model>/predictor.py` and are wi
 into these factories by their serve tasks. Until then the factories return stubs.
 """
 
+from collections.abc import Sequence
+from datetime import date
 from pathlib import Path
 from typing import Protocol
 from uuid import UUID
@@ -36,9 +38,21 @@ class DemandPredictor(Protocol):
     """Per-product demand forecast. Sync (CPU, one row, fast — AD-6.5) so it can sit
     behind the existing sync `forecast_demand(ctx, inventory) -> int` unchanged."""
 
-    def predict_quantity(self, tenant_id: UUID, product_id: UUID) -> int | None:
-        """Suggested reorder quantity for a product, or None when there is no signal
-        (no history / no model) — the caller then uses its documented fallback."""
+    def predict_quantity(
+        self,
+        tenant_id: UUID,
+        product_id: UUID,
+        history: Sequence,
+        *,
+        as_of: date | None = None,
+    ) -> int | None:
+        """Predicted demand (units) for a product, or None when there is no signal
+        (no history / no model) — the caller then uses its documented fallback.
+
+        `history` is this tenant's per-product daily demand (the `daily_product_demand`
+        read shape); the caller fetches it tenant-scoped and passes it in, keeping the
+        prediction inside the Wall. `as_of` (default: the day after the last history day)
+        is the day being forecast."""
         ...
 
 
@@ -62,7 +76,14 @@ class StubDemandPredictor:
     DemandPredictor (Task 6.6) replaces this when `ml_mode="trained"` and an artifact
     is present. Deterministic and offline — safe for CI."""
 
-    def predict_quantity(self, tenant_id: UUID, product_id: UUID) -> int | None:
+    def predict_quantity(
+        self,
+        tenant_id: UUID,
+        product_id: UUID,
+        history: Sequence,
+        *,
+        as_of: date | None = None,
+    ) -> int | None:
         return None
 
 
@@ -87,13 +108,26 @@ def _artifact_present(name: str) -> bool:
     return (ARTIFACTS_DIR / name).exists()
 
 
+def _card_path(artifact_name: str) -> Path:
+    """The model card written beside an artifact (`demand.joblib` → `demand_card.json`),
+    matching the trainer's naming (app/ml/demand/train.py)."""
+    return ARTIFACTS_DIR / f"{Path(artifact_name).stem}_card.json"
+
+
 def build_demand_predictor(settings: Settings) -> DemandPredictor:
-    """Real trained predictor when `ml_mode="trained"` and the artifact exists;
-    otherwise the offline stub. Task 6.6 fills in the trained branch."""
-    if settings.ml_mode == "trained" and _artifact_present(settings.ml_demand_artifact):
-        # Wired in Task 6.6 (load app/ml/demand/predictor.py from the artifact).
-        log.info("ml.predictor.demand.trained_pending", note="Task 6.6 wires this")
-    elif settings.ml_mode == "trained":
+    """Real trained predictor when `ml_mode="trained"` and BOTH the artifact and its card
+    exist (the card carries the feature list); otherwise the offline stub. A missing
+    artifact degrades to the stub (logged), never crashes startup (AD-6.3)."""
+    if settings.ml_mode == "trained":
+        artifact = ARTIFACTS_DIR / settings.ml_demand_artifact
+        card = _card_path(settings.ml_demand_artifact)
+        if artifact.exists() and card.exists():
+            # Imported lazily so the stub-default path (CI/dev) never pulls in joblib/the
+            # pipeline modules just to import the seam.
+            from app.ml.demand.predictor import TrainedDemandPredictor
+
+            log.info("ml.predictor.demand.trained", artifact=settings.ml_demand_artifact)
+            return TrainedDemandPredictor.load(artifact, card)
         log.warning(
             "ml.predictor.demand.artifact_missing",
             artifact=settings.ml_demand_artifact,

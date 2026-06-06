@@ -33,6 +33,7 @@ from app.infra.settings import Settings, get_settings
 from app.infra.storage import StorageClient
 from app.infra.supplier_dispatch import SupplierDispatcher
 from app.infra.vault import resolve_secrets
+from app.ml.predictors import build_demand_predictor
 from app.services.dispatcher import MessageDispatcher
 
 
@@ -131,7 +132,14 @@ async def lifespan(app: FastAPI):
         embedding_mode=settings.embedding_mode,
     )
 
-    # Future: app.state.demand_model = joblib.load(...)
+    # Demand predictor (Phase 6, Task 6.6). Loaded ONCE here (Constitution IV.5:
+    # joblib.load lives in lifespan, NEVER in a route) and served via app.state DI.
+    # The factory returns the trained predictor when ml_mode="trained" and the artifact
+    # + card are present, else the offline stub — the CI/dev default, exactly like
+    # ocr_mode/embedding_mode. A missing artifact degrades to the stub (logged), never
+    # crashing startup. Task 6.7 reaches it from the InventoryAgent via ToolContext.
+    app.state.demand_predictor = build_demand_predictor(settings)
+    log.info("modir.ml.demand_predictor.ready", ml_mode=settings.ml_mode)
 
     yield
 

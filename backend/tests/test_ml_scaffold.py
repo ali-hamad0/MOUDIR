@@ -39,7 +39,7 @@ def test_stub_mode_returns_stub_predictors() -> None:
 
 def test_stub_predictors_return_none_so_callers_fall_back() -> None:
     # None = "no signal"; the caller (e.g. forecast_demand) uses its documented default.
-    assert StubDemandPredictor().predict_quantity(uuid4(), uuid4()) is None
+    assert StubDemandPredictor().predict_quantity(uuid4(), uuid4(), []) is None
     assert StubChurnPredictor().predict_risk(uuid4(), uuid4()) is None
     assert StubAnomalyDetector().is_anomalous(uuid4(), 1000.0) is None
 
