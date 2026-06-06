@@ -5,6 +5,7 @@ import {
   BillsIcon,
   CustomersIcon,
   HomeIcon,
+  InsightsIcon,
   InventoryIcon,
   OrdersIcon,
   SetupIcon,
@@ -25,15 +26,15 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/bills", label: t.navBills, Icon: BillsIcon },
   { to: "/approvals", label: t.navReorders, Icon: ApprovalsIcon },
   { to: "/customers", label: t.navCustomers, Icon: CustomersIcon },
+  { to: "/insights", label: t.navInsights, Icon: InsightsIcon },
   { to: "/setup", label: t.navSetup, Icon: SetupIcon },
 ];
 
-// Mobile bottom nav stays ≤5 items (ux bottom-nav-limit). The full sidebar now has
-// seven destinations, so the bar keeps the five most day-to-day ones and drops
-// Setup (a one-time wizard, reached from the setup banner) and Customers (a
-// reference list, less frequent than orders/inventory/bills/approvals) — both stay
-// in the desktop sidebar.
-const _BOTTOM_NAV_EXCLUDE = new Set(["/setup", "/customers"]);
+// Mobile bottom nav stays ≤5 items (ux bottom-nav-limit). The full sidebar has eight
+// destinations, so the bar keeps the five most day-to-day ones and drops Setup (a
+// one-time wizard, reached from the setup banner), Customers (a reference list), and
+// Insights (a read-only analytics view) — all three stay in the desktop sidebar.
+const _BOTTOM_NAV_EXCLUDE = new Set(["/setup", "/customers", "/insights"]);
 export const BOTTOM_NAV_ITEMS: NavItem[] = NAV_ITEMS.filter(
   (item) => !_BOTTOM_NAV_EXCLUDE.has(item.to),
 );

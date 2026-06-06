@@ -1,7 +1,7 @@
 """InventoryAgent — a standalone LangGraph StateGraph that drafts reorder POs.
 
 Flow:  check_stock → (no inventory row → END, nothing to reorder)
-                    → forecast_demand (placeholder qty) → draft_purchase_order
+                    → forecast_demand (trained demand model, Phase 6) → draft_purchase_order
                       (Tier-1 Arabic note; writes a `draft` PO; NEVER sends)
 
 It mirrors the Phase 2 OrderAgent EXACTLY so Phase 7 can drop it under the
@@ -31,7 +31,9 @@ from app.agents.llm.router import LLMRouter
 from app.db.models import Inventory
 from app.infra.logging import get_logger
 from app.infra.settings import Settings
+from app.ml.predictors import DemandPredictor, StubDemandPredictor
 from app.repositories.products import ProductRepository
+from app.repositories.training_data import TrainingDataRepository
 
 log = get_logger(__name__)
 
@@ -102,10 +104,15 @@ class InventoryAgent:
         router: LLMRouter,
         settings: Settings,
         sessionmaker: async_sessionmaker,
+        demand_predictor: DemandPredictor | None = None,
     ) -> None:
         self._router = router
         self._settings = settings
         self._sessionmaker = sessionmaker
+        # The lifespan injects the trained (or stub) predictor; default to the offline
+        # stub so existing callers/tests that build the agent with three args still work
+        # and stay offline (the stub returns None → forecast_demand's documented fallback).
+        self._demand_predictor = demand_predictor or StubDemandPredictor()
         self._graph = _build_graph()
 
     async def draft_for_low_stock(self, tenant_id: UUID, product_id: UUID) -> UUID | None:
@@ -119,11 +126,20 @@ class InventoryAgent:
         that triggered it (a draft hiccup must never roll back a real fulfillment).
         """
         async with self._sessionmaker() as session:
+            # Pre-fetch this product's daily-demand series (tenant-scoped) so the sync
+            # forecast_demand can feed it to the predictor without awaiting (AD-6.5). For
+            # a brand-new product with no orders this is empty → the predictor returns
+            # None → forecast_demand uses its documented fallback.
+            demand_history = await TrainingDataRepository(session).daily_product_demand(
+                tenant_id, product_id=product_id
+            )
             ctx = ToolContext(
                 session=session,
                 tenant_id=tenant_id,
                 router=self._router,
                 settings=self._settings,
+                demand_predictor=self._demand_predictor,
+                demand_history=demand_history,
             )
             log.info(
                 "inventory_agent.draft_for_low_stock",

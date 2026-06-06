@@ -1,1 +1,10 @@
 timestamp,task,model,params,metric,cv_mean,cv_std,n_splits,extra,data_source
+2026-06-06T07:54:33.535021+00:00,demand,ridge,,MAE,6.85198204695777,0.6196228493402633,5,,synthetic
+2026-06-06T07:54:46.216016+00:00,demand,hgbr,,MAE,6.827329056838932,0.6038287730152079,5,,synthetic
+2026-06-06T07:54:52.162219+00:00,demand,xgboost,,MAE,7.117979907989502,0.5846898904699773,5,,synthetic
+2026-06-06T12:22:13.100780+00:00,anomaly,zscore,,f1,0.9636184857423796,0.003343582598855528,5,"{""precision"": 0.933, ""recall"": 0.9963}",synthetic
+2026-06-06T12:22:13.253400+00:00,anomaly,iqr,,f1,0.9081799163179916,0.0026529198433858114,5,"{""precision"": 0.8331, ""recall"": 0.9982}",synthetic
+2026-06-06T12:22:13.578214+00:00,anomaly,isolation_forest,,f1,0.30354447215475056,0.001543013274697516,5,"{""precision"": 0.1789, ""recall"": 1.0}",synthetic
+2026-06-06T12:42:04.828128+00:00,churn,logreg,cv=StratifiedGroupKFold(customer),f1_pos,0.9119865844674095,0.019367660908214866,5,"{""0"": {""precision"": 0.9689, ""recall"": 0.9795, ""f1"": 0.9742}, ""1"": {""precision"": 0.9296, ""recall"": 0.8956, ""f1"": 0.912}}",synthetic
+2026-06-06T12:42:07.320004+00:00,churn,random_forest,cv=StratifiedGroupKFold(customer),f1_pos,0.9123263903499543,0.01292325793314587,5,"{""0"": {""precision"": 0.9701, ""recall"": 0.9785, ""f1"": 0.9742}, ""1"": {""precision"": 0.9261, ""recall"": 0.8996, ""f1"": 0.9123}}",synthetic
+2026-06-06T12:42:10.211686+00:00,churn,xgboost,cv=StratifiedGroupKFold(customer),f1_pos,0.9203300878925423,0.011793726988839744,5,"{""0"": {""precision"": 0.9659, ""recall"": 0.9892, ""f1"": 0.9774}, ""1"": {""precision"": 0.9609, ""recall"": 0.8835, ""f1"": 0.9203}}",synthetic

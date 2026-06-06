@@ -39,6 +39,7 @@ export const t = {
   navCustomers: "الزباين",
   navInventory: "المخزون",
   navReorders: "موافقات الشرا",
+  navInsights: "التوقعات",
   navSetup: "ضبط المحل",
   // App shell / whoami
   shop: "المحل",
@@ -226,6 +227,24 @@ export const t = {
   billNotFound: "ما لقينا هالفاتورة.",
   billReviewError: "ما قدرنا نجيب الفاتورة.",
   billActionError: "ما قدرنا نكمّل العملية. جرّب مرة تانية.",
+  // ---- Insights (ML predictions panel, Phase 6) ----
+  insightsTitle: "توقعات الذكاء الاصطناعي",
+  insightsError: "ما قدرنا نجيب التوقعات.",
+  // Shown when ml_mode=stub: the models aren't serving yet, so values are blank.
+  insightsStubNote: "التوقعات لسا مطفّية (النماذج قيد التدريب). عم نعرض القوائم بدون أرقام.",
+  asOfLabel: "حتى",
+  insightsDemandTitle: "توقّع الطلب لبكرا",
+  insightsDemandEmpty: "ما في منتجات عندها تاريخ مبيعات بعد.",
+  colPredictedUnits: "الكمية المتوقّعة",
+  insightsChurnTitle: "زباين معرّضين للفقدان",
+  insightsChurnEmpty: "ما في زباين لتقييمهم بعد.",
+  colChurnRisk: "نسبة الخطر",
+  insightsAnomalyTitle: "حركة المبيعات اليومية",
+  insightsAnomalyEmpty: "ما في مبيعات مسجّلة بعد.",
+  colDay: "اليوم",
+  colRevenue: "المبيعات",
+  anomalyFlag: "غير طبيعي",
+  anomalyNormal: "طبيعي",
   // Pagination
   prevPage: "السابق",
   nextPage: "التالي",

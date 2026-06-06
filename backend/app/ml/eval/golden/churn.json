@@ -1,0 +1,194 @@
+[
+  {
+    "recency_days": 152,
+    "frequency": 6,
+    "monetary_lbp": 1437256,
+    "avg_order_lbp": 239542.66666666666,
+    "tenure_days": 283,
+    "churned": 1
+  },
+  {
+    "recency_days": 6,
+    "frequency": 8,
+    "monetary_lbp": 3061232,
+    "avg_order_lbp": 382654.0,
+    "tenure_days": 58,
+    "churned": 0
+  },
+  {
+    "recency_days": 151,
+    "frequency": 4,
+    "monetary_lbp": 1089176,
+    "avg_order_lbp": 272294.0,
+    "tenure_days": 299,
+    "churned": 1
+  },
+  {
+    "recency_days": 3,
+    "frequency": 7,
+    "monetary_lbp": 1745247,
+    "avg_order_lbp": 249321.0,
+    "tenure_days": 44,
+    "churned": 0
+  },
+  {
+    "recency_days": 171,
+    "frequency": 7,
+    "monetary_lbp": 2104911,
+    "avg_order_lbp": 300701.5714285714,
+    "tenure_days": 248,
+    "churned": 1
+  },
+  {
+    "recency_days": 8,
+    "frequency": 8,
+    "monetary_lbp": 1582878,
+    "avg_order_lbp": 197859.75,
+    "tenure_days": 60,
+    "churned": 0
+  },
+  {
+    "recency_days": 144,
+    "frequency": 6,
+    "monetary_lbp": 1850441,
+    "avg_order_lbp": 308406.8333333333,
+    "tenure_days": 263,
+    "churned": 1
+  },
+  {
+    "recency_days": 9,
+    "frequency": 6,
+    "monetary_lbp": 1928689,
+    "avg_order_lbp": 321448.1666666667,
+    "tenure_days": 60,
+    "churned": 0
+  },
+  {
+    "recency_days": 154,
+    "frequency": 8,
+    "monetary_lbp": 1868936,
+    "avg_order_lbp": 233617.0,
+    "tenure_days": 234,
+    "churned": 1
+  },
+  {
+    "recency_days": 5,
+    "frequency": 6,
+    "monetary_lbp": 1815520,
+    "avg_order_lbp": 302586.6666666667,
+    "tenure_days": 55,
+    "churned": 0
+  },
+  {
+    "recency_days": 142,
+    "frequency": 7,
+    "monetary_lbp": 1905238,
+    "avg_order_lbp": 272176.85714285716,
+    "tenure_days": 236,
+    "churned": 1
+  },
+  {
+    "recency_days": 26,
+    "frequency": 3,
+    "monetary_lbp": 1199077,
+    "avg_order_lbp": 399692.3333333333,
+    "tenure_days": 60,
+    "churned": 0
+  },
+  {
+    "recency_days": 193,
+    "frequency": 5,
+    "monetary_lbp": 1117128,
+    "avg_order_lbp": 223425.6,
+    "tenure_days": 297,
+    "churned": 1
+  },
+  {
+    "recency_days": 5,
+    "frequency": 5,
+    "monetary_lbp": 1630706,
+    "avg_order_lbp": 326141.2,
+    "tenure_days": 29,
+    "churned": 0
+  },
+  {
+    "recency_days": 195,
+    "frequency": 6,
+    "monetary_lbp": 1522759,
+    "avg_order_lbp": 253793.16666666666,
+    "tenure_days": 298,
+    "churned": 1
+  },
+  {
+    "recency_days": 23,
+    "frequency": 8,
+    "monetary_lbp": 1986670,
+    "avg_order_lbp": 248333.75,
+    "tenure_days": 57,
+    "churned": 0
+  },
+  {
+    "recency_days": 173,
+    "frequency": 4,
+    "monetary_lbp": 1319356,
+    "avg_order_lbp": 329839.0,
+    "tenure_days": 300,
+    "churned": 1
+  },
+  {
+    "recency_days": 1,
+    "frequency": 8,
+    "monetary_lbp": 1876313,
+    "avg_order_lbp": 234539.125,
+    "tenure_days": 56,
+    "churned": 0
+  },
+  {
+    "recency_days": 197,
+    "frequency": 4,
+    "monetary_lbp": 1356980,
+    "avg_order_lbp": 339245.0,
+    "tenure_days": 260,
+    "churned": 1
+  },
+  {
+    "recency_days": 2,
+    "frequency": 7,
+    "monetary_lbp": 2427329,
+    "avg_order_lbp": 346761.28571428574,
+    "tenure_days": 50,
+    "churned": 0
+  },
+  {
+    "recency_days": 144,
+    "frequency": 3,
+    "monetary_lbp": 578846,
+    "avg_order_lbp": 192948.66666666666,
+    "tenure_days": 278,
+    "churned": 1
+  },
+  {
+    "recency_days": 19,
+    "frequency": 7,
+    "monetary_lbp": 1893638,
+    "avg_order_lbp": 270519.71428571426,
+    "tenure_days": 56,
+    "churned": 0
+  },
+  {
+    "recency_days": 162,
+    "frequency": 5,
+    "monetary_lbp": 1547050,
+    "avg_order_lbp": 309410.0,
+    "tenure_days": 273,
+    "churned": 1
+  },
+  {
+    "recency_days": 14,
+    "frequency": 5,
+    "monetary_lbp": 1408061,
+    "avg_order_lbp": 281612.2,
+    "tenure_days": 55,
+    "churned": 0
+  }
+]

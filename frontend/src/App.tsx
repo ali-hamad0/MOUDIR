@@ -10,6 +10,7 @@ import BillReviewPage from "./pages/BillReviewPage";
 import BillsPage from "./pages/BillsPage";
 import CustomersPage from "./pages/CustomersPage";
 import DashboardPage from "./pages/DashboardPage";
+import InsightsPage from "./pages/InsightsPage";
 import InventoryPage from "./pages/InventoryPage";
 import LoginPage from "./pages/LoginPage";
 import OrdersPage from "./pages/OrdersPage";
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/bills/:billId" element={<BillReviewPage />} />
             <Route path="/approvals" element={<ReordersPage />} />
             <Route path="/customers" element={<CustomersPage />} />
+            <Route path="/insights" element={<InsightsPage />} />
             <Route path="/setup" element={<SetupWizard />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

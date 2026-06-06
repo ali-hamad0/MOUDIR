@@ -32,3 +32,6 @@ docker-compose.override.yml
 .claude/skills/
 # Personal IDE settings
 .vscode/
+# Phase 6 ML training-data snapshots (data, not code — exported for offline/Colab use)
+ml_export/
+backend/ml_export/

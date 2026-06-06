@@ -1,0 +1,37 @@
+{
+  "task": "churn",
+  "model": "xgboost",
+  "metric": "f1_pos",
+  "cv_mean": 0.9203300878925423,
+  "cv_std": 0.011793726988839744,
+  "n_splits": 5,
+  "features": [
+    "recency_days",
+    "frequency",
+    "monetary_lbp",
+    "avg_order_lbp",
+    "tenure_days"
+  ],
+  "target": "churned",
+  "n_rows": 1080,
+  "n_tenants": 3,
+  "data_source": "synthetic",
+  "extra": {
+    "per_class": {
+      "0": {
+        "precision": 0.9659,
+        "recall": 0.9892,
+        "f1": 0.9774
+      },
+      "1": {
+        "precision": 0.9609,
+        "recall": 0.8835,
+        "f1": 0.9203
+      }
+    },
+    "n_pos": 249,
+    "n_neg": 831
+  },
+  "notes": "At risk = a customer with >=1 past order who places NO order in the next 30 days. StratifiedGroupKFold CV grouped by customer (a customer's rows never straddle the train/test split, so the score is honest for unseen customers); highest churned-class F1 wins. Imbalance handled via class_weight='balanced' (logreg/forest) / scale_pos_weight (xgboost).",
+  "trained_at": "2026-06-06T12:42:10.378374+00:00"
+}

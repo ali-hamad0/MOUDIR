@@ -1,0 +1,19 @@
+# Golden-eval floors/ceilings (Phase 6, Task 6.11). A trained model must clear these on the
+# committed golden sets or CI goes red. Values are set with a clear margin below/above what
+# the current models score, so normal training passes but a real regression (or a model
+# broken on purpose) trips the gate. Synthetic data — these gate the PIPELINE, not real-world
+# accuracy. Tune here, never in code.
+
+demand:
+  # Mean absolute error on 20 held-out bakery days. Held-out CV MAE ~4.3; ceiling leaves room.
+  mae_max: 12.0
+
+churn:
+  # Recall on the churned (positive) class — the cost of a miss is a lost customer.
+  recall_pos_min: 0.70
+  precision_pos_min: 0.60
+
+anomaly:
+  # Catch injected spikes/collapses (recall) without crying wolf on normal days (precision).
+  recall_pos_min: 0.70
+  precision_pos_min: 0.50

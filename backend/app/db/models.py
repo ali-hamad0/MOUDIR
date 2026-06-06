@@ -54,6 +54,11 @@ class Tenant(Base):
     )
     plan_tier: Mapped[str] = mapped_column(String(32), nullable=False, default="free")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Provenance marker (Phase 6, Task 6.2). NULL/"real" for genuine tenants;
+    # "synthetic" for tenants created by the ML history seeder. The honesty rule:
+    # models trained on synthetic data must be able to say so, and anything that must
+    # be real can exclude synthetic tenants. Nullable so it never burdens real signup.
+    data_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
 
 class TenantOwner(Base):
