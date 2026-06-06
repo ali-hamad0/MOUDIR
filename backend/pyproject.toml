@@ -27,6 +27,17 @@ dependencies = [
     "minio>=7.2.0",          # Phase 5 — supplier-bill image storage (MinIO/S3)
     "google-cloud-vision>=3.7.0",  # Phase 5 — OCR engine (Lebanese-Arabic bills)
     "pillow>=11.0.0",        # Phase 5 — bill image preprocessing (deskew/denoise/contrast)
+    # Phase 6 — The ML Layer. ML predicts (Constitution IV), never an LLM prompt.
+    # Pinned floors; trained pipelines live in app/ml/ and load once via lifespan.
+    # numpy was already a transitive dep (app/infra/embeddings.py) — declared here
+    # directly now that ML depends on it explicitly. prophet is intentionally NOT
+    # added yet: Task 6.5 decides per the data whether the demand series warrant it,
+    # and a heavy dep stays out of the image until it earns its place.
+    "numpy>=2.1.0",          # Phase 6 — feature arrays, seasonal residuals
+    "pandas>=2.2.0",         # Phase 6 — training frames, time-indexed history
+    "scikit-learn>=1.5.0",   # Phase 6 — Pipeline, TimeSeriesSplit, CV, the baselines
+    "xgboost>=2.1.0",        # Phase 6 — gradient-boosted candidate per task
+    "joblib>=1.4.0",         # Phase 6 — persist/load trained pipelines (artifacts)
 ]
 
 [dependency-groups]
