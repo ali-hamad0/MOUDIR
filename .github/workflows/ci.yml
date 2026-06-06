@@ -78,6 +78,14 @@ jobs:
         # stubbed, so the suite stays offline; the live smoke test is deselected.
         run: uv run pytest tests -v
 
+      - name: Golden ML evals (real artifacts)
+        working-directory: ./backend
+        # Phase 6 (Task 6.11): run the committed golden sets through the REAL trained
+        # *.joblib and fail if any model regresses below its threshold
+        # (app/ml/eval/thresholds.yaml). A model whose artifact is absent is skipped, not
+        # failed. No DB/Vault needed — it loads artifacts + golden JSON straight from disk.
+        run: uv run python -m app.ml.eval
+
       - name: Forbidden patterns check
         run: |
           # Scan only .py source (never compiled __pycache__ bytecode) and match
