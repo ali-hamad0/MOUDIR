@@ -1,1 +1,4 @@
 timestamp,task,model,params,metric,cv_mean,cv_std,n_splits,extra,data_source
+2026-06-06T07:54:33.535021+00:00,demand,ridge,,MAE,6.85198204695777,0.6196228493402633,5,,synthetic
+2026-06-06T07:54:46.216016+00:00,demand,hgbr,,MAE,6.827329056838932,0.6038287730152079,5,,synthetic
+2026-06-06T07:54:52.162219+00:00,demand,xgboost,,MAE,7.117979907989502,0.5846898904699773,5,,synthetic

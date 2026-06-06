@@ -1,0 +1,29 @@
+{
+  "task": "demand",
+  "model": "hgbr",
+  "metric": "MAE",
+  "cv_mean": 6.827329056838932,
+  "cv_std": 0.6038287730152079,
+  "n_splits": 5,
+  "features": [
+    "day_of_week",
+    "is_weekend",
+    "is_ramadan",
+    "is_summer",
+    "is_payday",
+    "month",
+    "lag_1",
+    "lag_7",
+    "lag_14",
+    "roll_mean_7",
+    "roll_std_7",
+    "roll_mean_28",
+    "roll_std_28"
+  ],
+  "target": "units",
+  "n_rows": 5445,
+  "n_tenants": 3,
+  "data_source": "synthetic",
+  "notes": "Per-product daily demand. TimeSeriesSplit CV; lower MAE wins. Cold-start products have no history and fall back to the caller's default at serve time.",
+  "trained_at": "2026-06-06T07:54:55.327570+00:00"
+}
