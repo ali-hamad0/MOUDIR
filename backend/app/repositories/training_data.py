@@ -134,6 +134,25 @@ class TrainingDataRepository(TenantScopedRepository[Order]):
         )
         return (await self._session.execute(stmt)).all()
 
+    async def customer_orders(
+        self, tenant_id: UUID, *, start: date | None = None, end: date | None = None
+    ) -> Sequence[Row[tuple[UUID, date, int]]]:
+        """One row PER ORDER: (customer_id, day, total_lbp), oldest first.
+
+        The churn builder (Task 6.4) needs each order's day to split a customer's PAST
+        orders (features) from the forward horizon window (label) — the aggregated
+        `customer_order_history` can't do that, so this exposes the per-order grain.
+        Tenant-scoped; a missing total counts as 0.
+        """
+        day = _beirut_day(Order.created_at).label("day")
+        stmt = (
+            select(Order.customer_id, day, func.coalesce(Order.total_lbp, 0).label("total_lbp"))
+            .where(Order.tenant_id == tenant_id)
+            .order_by(day)
+        )
+        stmt = self._bound_window(stmt, start, end)
+        return (await self._session.execute(stmt)).all()
+
     @staticmethod
     def _bound_window(stmt, start: date | None, end: date | None):
         """Apply an inclusive-start / exclusive-end Beirut-day window to a statement
