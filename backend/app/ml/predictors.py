@@ -57,15 +57,30 @@ class DemandPredictor(Protocol):
 
 
 class ChurnPredictor(Protocol):
-    """Per-customer churn risk (binary). Returns a probability in [0, 1]."""
+    """Per-customer churn risk (binary, imbalanced). Batch: the read API scores all of a
+    tenant's customers at once from their order history."""
 
-    def predict_risk(self, tenant_id: UUID, customer_id: UUID) -> float | None: ...
+    def predict_risks(
+        self, tenant_id: UUID, orders: Sequence, *, as_of: date | None = None
+    ) -> dict[str, float]:
+        """Map of customer_id (str) → churn probability in [0, 1], for every customer with
+        a past order as of `as_of` (default: the day after the last order). `orders` is this
+        tenant's per-order history (the `customer_orders` read shape), fetched tenant-scoped
+        and passed in (the Wall). Empty when there is no signal (no history / no model)."""
+        ...
 
 
 class AnomalyDetector(Protocol):
-    """Is a given day's revenue anomalous for this tenant? Unsupervised + threshold."""
+    """Is a day's revenue anomalous for this tenant? Unsupervised + threshold. Batch: the
+    read API flags the most recent `window` days from the tenant's revenue series."""
 
-    def is_anomalous(self, tenant_id: UUID, revenue: float) -> bool | None: ...
+    def flag_days(
+        self, tenant_id: UUID, revenue_history: Sequence, *, window: int = 14
+    ) -> dict[date, bool]:
+        """Map of day → is_anomalous for the last `window` days. `revenue_history` is this
+        tenant's daily revenue (the `daily_revenue` read shape), fetched tenant-scoped and
+        passed in. Empty when there is no signal (no history / no model)."""
+        ...
 
 
 # ── Stubs (deterministic, offline — the CI/dev default) ──────────────────────
@@ -88,17 +103,23 @@ class StubDemandPredictor:
 
 
 class StubChurnPredictor:
-    """Returns None (no signal) for CI/dev. Real model in Task 6.8."""
+    """Returns no scores (offline CI/dev default). The trained ChurnPredictor (Task 6.10)
+    replaces this when `ml_mode="trained"` and the artifact is present."""
 
-    def predict_risk(self, tenant_id: UUID, customer_id: UUID) -> float | None:
-        return None
+    def predict_risks(
+        self, tenant_id: UUID, orders: Sequence, *, as_of: date | None = None
+    ) -> dict[str, float]:
+        return {}
 
 
 class StubAnomalyDetector:
-    """Returns None (no signal) for CI/dev. Real model in Task 6.9."""
+    """Returns no flags (offline CI/dev default). The trained detector (Task 6.10) replaces
+    this when `ml_mode="trained"` and the artifact is present."""
 
-    def is_anomalous(self, tenant_id: UUID, revenue: float) -> bool | None:
-        return None
+    def flag_days(
+        self, tenant_id: UUID, revenue_history: Sequence, *, window: int = 14
+    ) -> dict[date, bool]:
+        return {}
 
 
 # ── Factories (selected by Settings.ml_mode) ─────────────────────────────────
@@ -137,9 +158,16 @@ def build_demand_predictor(settings: Settings) -> DemandPredictor:
 
 
 def build_churn_predictor(settings: Settings) -> ChurnPredictor:
-    """Real trained predictor when available; otherwise the offline stub.
-    Task 6.8 fills in the trained branch."""
-    if settings.ml_mode == "trained" and not _artifact_present(settings.ml_churn_artifact):
+    """Real trained predictor when `ml_mode="trained"` and BOTH the artifact and its card
+    exist; otherwise the offline stub (missing artifact degrades, logged — AD-6.3)."""
+    if settings.ml_mode == "trained":
+        artifact = ARTIFACTS_DIR / settings.ml_churn_artifact
+        card = _card_path(settings.ml_churn_artifact)
+        if artifact.exists() and card.exists():
+            from app.ml.churn.predictor import TrainedChurnPredictor
+
+            log.info("ml.predictor.churn.trained", artifact=settings.ml_churn_artifact)
+            return TrainedChurnPredictor.load(artifact, card)
         log.warning(
             "ml.predictor.churn.artifact_missing",
             artifact=settings.ml_churn_artifact,
@@ -149,9 +177,16 @@ def build_churn_predictor(settings: Settings) -> ChurnPredictor:
 
 
 def build_anomaly_detector(settings: Settings) -> AnomalyDetector:
-    """Real trained detector when available; otherwise the offline stub.
-    Task 6.9 fills in the trained branch."""
-    if settings.ml_mode == "trained" and not _artifact_present(settings.ml_anomaly_artifact):
+    """Real trained detector when `ml_mode="trained"` and the artifact exists; otherwise the
+    offline stub (missing artifact degrades, logged — AD-6.3). The detector carries its own
+    feature list, so only the artifact is required (the card is informational)."""
+    if settings.ml_mode == "trained":
+        artifact = ARTIFACTS_DIR / settings.ml_anomaly_artifact
+        if artifact.exists():
+            from app.ml.anomaly.predictor import TrainedAnomalyDetector
+
+            log.info("ml.predictor.anomaly.trained", artifact=settings.ml_anomaly_artifact)
+            return TrainedAnomalyDetector.load(artifact)
         log.warning(
             "ml.predictor.anomaly.artifact_missing",
             artifact=settings.ml_anomaly_artifact,

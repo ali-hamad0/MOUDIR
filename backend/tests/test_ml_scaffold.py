@@ -37,11 +37,12 @@ def test_stub_mode_returns_stub_predictors() -> None:
     assert isinstance(build_anomaly_detector(settings), StubAnomalyDetector)
 
 
-def test_stub_predictors_return_none_so_callers_fall_back() -> None:
-    # None = "no signal"; the caller (e.g. forecast_demand) uses its documented default.
+def test_stub_predictors_return_no_signal_so_callers_fall_back() -> None:
+    # No signal: demand → None (caller falls back); churn/anomaly → empty (the /predictions
+    # API still enumerates the tenant's entities, just without values).
     assert StubDemandPredictor().predict_quantity(uuid4(), uuid4(), []) is None
-    assert StubChurnPredictor().predict_risk(uuid4(), uuid4()) is None
-    assert StubAnomalyDetector().is_anomalous(uuid4(), 1000.0) is None
+    assert StubChurnPredictor().predict_risks(uuid4(), []) == {}
+    assert StubAnomalyDetector().flag_days(uuid4(), []) == {}
 
 
 def test_trained_mode_missing_artifact_degrades_to_stub() -> None:

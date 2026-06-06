@@ -20,6 +20,7 @@ from app.api import (
     me,
     orders,
     owners,
+    predictions,
     profile,
     signup_requests,
     webhooks,
@@ -33,7 +34,11 @@ from app.infra.settings import Settings, get_settings
 from app.infra.storage import StorageClient
 from app.infra.supplier_dispatch import SupplierDispatcher
 from app.infra.vault import resolve_secrets
-from app.ml.predictors import build_demand_predictor
+from app.ml.predictors import (
+    build_anomaly_detector,
+    build_churn_predictor,
+    build_demand_predictor,
+)
 from app.services.dispatcher import MessageDispatcher
 
 
@@ -100,7 +105,12 @@ async def lifespan(app: FastAPI):
     # ocr_mode/embedding_mode. A missing artifact degrades to the stub (logged), never
     # crashing startup. Built before the InventoryAgent so it can be injected into it.
     app.state.demand_predictor = build_demand_predictor(settings)
-    log.info("modir.ml.demand_predictor.ready", ml_mode=settings.ml_mode)
+    # Churn + anomaly predictors are loaded the SAME way (once, here) and served by the
+    # read-only /predictions/* API (Task 6.10) via DI — never loaded in a route. Same
+    # stub-by-default / trained-when-artifact-present contract as the demand predictor.
+    app.state.churn_predictor = build_churn_predictor(settings)
+    app.state.anomaly_detector = build_anomaly_detector(settings)
+    log.info("modir.ml.predictors.ready", ml_mode=settings.ml_mode)
     # The InventoryAgent mirrors the OrderAgent: built once, opens its own session
     # per call. Task 4.9 reaches it via app.state.inventory_agent to draft a reorder
     # PO inline when order completion drops stock below threshold. Task 6.7 hands it the
@@ -190,6 +200,7 @@ def create_app() -> FastAPI:
     app.include_router(bills.router)
     app.include_router(customers.router)
     app.include_router(me.router)
+    app.include_router(predictions.router)
     app.include_router(webhooks.router)
 
     return app
