@@ -11,10 +11,11 @@ What it does (Constitution IV, line by line):
   - builds a sklearn.Pipeline per candidate with preprocessing INSIDE (no leakage across
     the CV boundary), each handling the class imbalance: LogisticRegression and
     RandomForest with class_weight="balanced", XGBoost with scale_pos_weight;
-  - compares the 3 candidates with StratifiedKFold CV (a shuffle is fine — churn is a
-    cross-sectional snapshot, NOT a time series like demand) and logs every run to
-    results.csv with the headline metric (F1 on the churned class) mean +- std AND the
-    full PER-CLASS precision/recall/F1 in `extra` (macro-only would hide the imbalance);
+  - compares the 3 candidates with StratifiedGroupKFold CV grouped by CUSTOMER (since a
+    customer recurs across the stacked cutoffs, a plain shuffle would put the same customer
+    in train and test and report an optimistic score — grouping keeps it honest for unseen
+    customers) and logs every run to results.csv with the headline metric (F1 on the churned
+    class) mean +- std AND the full PER-CLASS precision/recall/F1 in `extra`;
   - refits the winner (highest churned-class F1) on all data and saves it to
     artifacts/churn.joblib plus a model_card.json (label rule, features, per-class metrics).
 
@@ -38,7 +39,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import precision_recall_fscore_support
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -141,20 +142,25 @@ def _candidates(features: list[str], *, scale_pos_weight: float) -> dict[str, Pi
 
 
 def _cv_per_class(
-    pipeline: Pipeline, X: pd.DataFrame, y: pd.Series, *, n_splits: int
+    pipeline: Pipeline, X: pd.DataFrame, y: pd.Series, groups: pd.Series, *, n_splits: int
 ) -> tuple[float, float, dict]:
-    """StratifiedKFold CV. Returns (mean F1 on the churned class, its std, per-class dict).
+    """StratifiedGroupKFold CV. Returns (mean F1 on the churned class, its std, per-class).
 
-    Per-class precision/recall/F1 (for BOTH classes, averaged over folds) is reported so
-    the imbalance is visible — a macro/accuracy number alone would hide a model that just
-    predicts 'not churned' for everyone."""
-    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
+    GROUPED by customer: because we stack several monthly cutoffs, one customer contributes
+    several (correlated) rows, so a plain shuffle could put the same customer in both train
+    and test and report an OPTIMISTIC score. Grouping by customer keeps all of a customer's
+    rows on one side — an honest estimate of generalization to UNSEEN customers (this is the
+    leakage the Phase 6 defend-it question targets). Still stratified so each fold keeps the
+    class balance. Per-class precision/recall/F1 (BOTH classes, averaged over folds) is
+    reported so the imbalance is visible — a macro/accuracy number alone would hide a model
+    that just predicts 'not churned' for everyone."""
+    skf = StratifiedGroupKFold(n_splits=n_splits)
     f1_pos: list[float] = []
     agg = {
         0: {"precision": [], "recall": [], "f1": []},
         1: {"precision": [], "recall": [], "f1": []},
     }
-    for train_idx, test_idx in skf.split(X, y):
+    for train_idx, test_idx in skf.split(X, y, groups):
         pipeline.fit(X.iloc[train_idx], y.iloc[train_idx])
         pred = pipeline.predict(X.iloc[test_idx])
         precision, recall, f1, _ = precision_recall_fscore_support(
@@ -193,7 +199,12 @@ def train_from_frame(
     if min_class < 2:
         log.warning("train_churn.minority_too_small", min_class=min_class)
         return None
-    n_splits = min(N_SPLITS, min_class)
+    groups = df["customer_id"]
+    # Folds can't exceed the minority-class count or the number of customers (groups).
+    n_splits = min(N_SPLITS, min_class, int(groups.nunique()))
+    if n_splits < 2:
+        log.warning("train_churn.too_few_groups", n_groups=int(groups.nunique()))
+        return None
 
     features = feature_columns()
     X = df[features]
@@ -204,7 +215,7 @@ def train_from_frame(
 
     results: dict[str, tuple[float, float, dict]] = {}
     for name, pipeline in _candidates(features, scale_pos_weight=scale_pos_weight).items():
-        mean, std, per_class = _cv_per_class(pipeline, X, y, n_splits=n_splits)
+        mean, std, per_class = _cv_per_class(pipeline, X, y, groups, n_splits=n_splits)
         results[name] = (mean, std, per_class)
         result = ExperimentResult(
             task=TASK,
@@ -213,6 +224,7 @@ def train_from_frame(
             cv_mean=mean,
             cv_std=std,
             n_splits=n_splits,
+            params="cv=StratifiedGroupKFold(customer)",
             extra=json.dumps(per_class),
             data_source="synthetic",
         )
@@ -247,8 +259,10 @@ def train_from_frame(
         data_source="synthetic",
         extra={"per_class": best_per_class, "n_pos": n_pos, "n_neg": n_neg},
         notes="At risk = a customer with >=1 past order who places NO order in the next 30 "
-        "days. StratifiedKFold CV; highest churned-class F1 wins. Imbalance handled via "
-        "class_weight='balanced' (logreg/forest) / scale_pos_weight (xgboost).",
+        "days. StratifiedGroupKFold CV grouped by customer (a customer's rows never straddle "
+        "the train/test split, so the score is honest for unseen customers); highest "
+        "churned-class F1 wins. Imbalance handled via class_weight='balanced' (logreg/forest) "
+        "/ scale_pos_weight (xgboost).",
     )
     card.save(card_path)
     log.info(

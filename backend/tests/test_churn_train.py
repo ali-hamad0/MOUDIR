@@ -29,18 +29,23 @@ from app.ml.features.churn import build_churn_features, feature_columns
 
 
 def _synthetic_frame(*, churn_share: float = 0.3, n_customers: int = 150) -> pd.DataFrame:
-    """An imbalanced churn frame: ~`churn_share` of customers place no order in the 30-day
-    forward window (churned=1), the rest do (churned=0). Built through the real builder so
-    recency/frequency/monetary are exactly what training sees."""
+    """An imbalanced churn frame with REAL signal, mirroring the seeded data: ~`churn_share`
+    of customers tapered off long ago (only OLD past orders → high recency, and no order in
+    the 30-day forward window → churned=1); the rest are active (a RECENT past order → low
+    recency, plus an order in the horizon → churned=0). Built through the real builder so
+    recency/frequency/monetary are exactly what training sees — recency is the true
+    separator (and the grouped CV must reflect that for UNSEEN customers, not memorize)."""
     rng = random.Random(42)
     as_of = date(2025, 5, 1)
     orders: list[tuple] = []
     for i in range(n_customers):
         cid = f"c{i}"
+        churns = rng.random() < churn_share
         for _ in range(rng.randint(2, 8)):  # past orders (features)
-            past_day = as_of - timedelta(days=rng.randint(31, 300))
-            orders.append((cid, past_day, rng.randint(500, 5000)))
-        if rng.random() >= churn_share:  # returns within the horizon → churned=0
+            # Churners' last activity is OLD; active customers ordered recently.
+            age = rng.randint(90, 300) if churns else rng.randint(1, 120)
+            orders.append((cid, as_of - timedelta(days=age), rng.randint(500, 5000)))
+        if not churns:  # returns within the horizon → churned=0
             orders.append((cid, as_of + timedelta(days=rng.randint(1, 29)), rng.randint(500, 5000)))
     return build_churn_features(orders, as_of=as_of)
 
@@ -69,6 +74,14 @@ def test_logs_three_candidates_with_per_class_metrics(out_paths) -> None:
         per_class = json.loads(raw)
         assert set(per_class) == {"0", "1"}
         assert set(per_class["1"]) == {"precision", "recall", "f1"}
+
+
+def test_results_record_grouped_cv_scheme(out_paths) -> None:
+    # The CV scheme is recorded so the comparison is reproducible and the grouping (the
+    # honest-CV decision) is auditable from results.csv, not just the code.
+    _train(_synthetic_frame(), out_paths)
+    rows = pd.read_csv(out_paths[2])
+    assert (rows["params"] == "cv=StratifiedGroupKFold(customer)").all()
 
 
 def test_winner_has_highest_f1_pos(out_paths) -> None:
