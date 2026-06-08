@@ -1,8 +1,25 @@
-"""Intent classification for the OwnerSupervisor (Task 7.6).
+"""Intent classification for the OwnerSupervisor (Task 7.6 / AD-7.8).
 
 `classify_intent` is the only LLM call in the route node. It maps an owner's
 freeform Arabic message to one of five intent classes. On any LLM failure or
 parse error it defaults to "advisor" — never crashes the supervisor.
+
+Two-layer tool-isolation enforcement (AD-7.8):
+
+  Layer 1 — dispatcher role gate (MessageDispatcher.dispatch):
+    The dispatcher checks `identity.role` BEFORE the supervisor is ever reached.
+    - role == "customer" → OrderAgent directly; supervisor is never called.
+    - role == "owner"    → OwnerSupervisor; OrderAgent customer tools are never reached.
+    This is the first allowlist gate and is tested in test_dispatcher.py /
+    test_tool_allowlists.py.
+
+  Layer 2 — per-agent graph topology (this module + agent.py):
+    `classify_intent` is called exclusively inside the supervisor's `route` node,
+    which is only reachable via the owner path. Each specialist sub-graph is a
+    separately compiled StateGraph whose node set is exactly that agent's tools.
+    No edge exists from FinanceAgent to `queue_reengagement`; no edge from
+    CustomerAgent to `check_stock`. The graph topology IS the allowlist —
+    enforced structurally, not by string matching. See test_tool_allowlists.py.
 
 Kept in its own module so it can be tested in isolation (mocking the LLM) and
 so the golden-eval script (Task 7.10) can import it directly.
