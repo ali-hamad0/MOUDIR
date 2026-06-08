@@ -24,6 +24,8 @@ dependencies = [
     "langchain-anthropic>=0.3.0",  # Phase 7 — Claude adapter (emergency fallback; quarantined to anthropic_router.py)
     "langgraph>=0.2.0",
     "langgraph-checkpoint-postgres>=2.0.0",  # Phase 7 — Postgres-backed conversation checkpoints
+    "psycopg[binary]>=3.1.0",               # Phase 7 — psycopg3 binary wheel for the LangGraph checkpointer
+    "psycopg-pool>=3.2.0",                  # Phase 7 — async connection pool for the checkpointer
     "langsmith>=0.1.0",
     "tzdata>=2026.2",
     "aiosmtplib>=5.1.1",
@@ -69,3 +71,6 @@ target-version = ["py311"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["backend/tests"]
+markers = [
+    "integration: requires a running Postgres instance (skipped in offline CI)",
+]

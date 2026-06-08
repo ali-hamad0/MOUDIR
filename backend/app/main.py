@@ -29,6 +29,7 @@ from app.api import (
 )
 from app.db.session import create_engine
 from app.infra.bill_committer import BillCommitter
+from app.infra.checkpointer import build_checkpointer
 from app.infra.embeddings import build_embedding_client
 from app.infra.logging import configure_logging, get_logger
 from app.infra.ocr import build_ocr_engine
@@ -143,6 +144,12 @@ async def lifespan(app: FastAPI):
     app.state.churn_predictor = build_churn_predictor(settings)
     app.state.anomaly_detector = build_anomaly_detector(settings)
     log.info("modir.ml.predictors.ready", ml_mode=settings.ml_mode)
+    # LangGraph Postgres checkpointer (Task 7.2). Persists supervisor conversation
+    # state so a mid-flight owner session resumes after a process restart. The pool
+    # is closed in the shutdown block below. LangGraph owns its own tables (created
+    # by checkpointer.setup()) — they are NOT in our Alembic migrations.
+    app.state.checkpointer, _checkpoint_pool = await build_checkpointer(str(settings.database_url))
+    log.info("modir.checkpointer.ready")
     # The InventoryAgent mirrors the OrderAgent: built once, opens its own session
     # per call. Task 4.9 reaches it via app.state.inventory_agent to draft a reorder
     # PO inline when order completion drops stock below threshold. Task 6.7 hands it the
@@ -188,6 +195,8 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    await _checkpoint_pool.close()
+    log.info("modir.checkpointer.closed")
     await app.state.db_engine.dispose()
     log.info("modir.db.engine.disposed")
 
