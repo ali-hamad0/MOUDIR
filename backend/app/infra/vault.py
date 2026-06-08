@@ -35,9 +35,15 @@ class VaultClient:
 def resolve_secrets(settings):
     """Mutate the settings object with secrets fetched from Vault.
 
-    Called from lifespan startup. Refuses to proceed if any secret is missing.
+    Called from lifespan startup. Refuses to proceed if any required secret is
+    missing. Optional secrets (Grok, Anthropic) are skipped when absent — the
+    FallbackLLMRouter will skip those providers at startup.
     """
+    from pydantic import SecretStr
+
     vault = VaultClient()
+
+    # Required secrets — startup fails if any of these are absent in Vault.
     secrets_map = {
         "gemini_api_key": ("modir/llm", "gemini_api_key"),
         "langsmith_api_key": ("modir/llm", "langsmith_api_key"),
@@ -51,9 +57,28 @@ def resolve_secrets(settings):
         "ocr_service_account_json": ("modir/ocr", "service_account_json"),
     }
     for field, (path, key) in secrets_map.items():
-        from pydantic import SecretStr
-
         value = vault.read_secret(path, key)
         setattr(settings, field, SecretStr(value))
-    log.info("vault.secrets.resolved", count=len(secrets_map))
+
+    # Optional secrets — absent in Vault means the provider is skipped at startup
+    # (logged as info, not an error). Leaving the field at its empty-string default
+    # is the signal to FallbackLLMRouter to exclude that provider.
+    optional_secrets_map = {
+        "grok_api_key": ("modir/llm", "grok_api_key"),
+        "anthropic_api_key": ("modir/llm", "anthropic_api_key"),
+    }
+    resolved_optional = 0
+    for field, (path, key) in optional_secrets_map.items():
+        try:
+            value = vault.read_secret(path, key)
+            setattr(settings, field, SecretStr(value))
+            resolved_optional += 1
+        except Exception:
+            log.info("vault.optional_secret.absent", field=field)
+
+    log.info(
+        "vault.secrets.resolved",
+        required=len(secrets_map),
+        optional=resolved_optional,
+    )
     return settings

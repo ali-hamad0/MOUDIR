@@ -6,7 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.agents.inventory.agent import InventoryAgent
-from app.agents.llm.router import GeminiRouter
+from app.agents.llm.anthropic_router import AnthropicRouter
+from app.agents.llm.grok_router import GrokRouter
+from app.agents.llm.router import FallbackLLMRouter, GeminiRouter, LLMRouter
 from app.agents.ocr.agent import BillExtractionAgent
 from app.agents.order.agent import OrderAgent
 from app.api import (
@@ -40,6 +42,36 @@ from app.ml.predictors import (
     build_demand_predictor,
 )
 from app.services.dispatcher import MessageDispatcher
+
+
+def _build_llm_router(settings: Settings, log) -> LLMRouter:
+    """Build the LLM router, adding optional fallback providers when keyed.
+
+    Gemini is always included (required). Grok and Anthropic are added only when
+    their keys are non-empty (resolved from Vault — absent keys are logged as info
+    at startup and those providers are skipped, not crashed). The result is a
+    FallbackLLMRouter when multiple providers are available, or just GeminiRouter
+    when only Gemini is configured (avoids the with_fallbacks wrapper overhead).
+    """
+    providers: list[LLMRouter] = [GeminiRouter(settings)]
+
+    if settings.grok_api_key.get_secret_value():
+        providers.append(GrokRouter(settings))
+        log.info("modir.llm.grok.enabled", model_t1=settings.grok_tier1_model)
+    else:
+        log.info("modir.llm.grok.skipped", reason="no_api_key")
+
+    if settings.anthropic_api_key.get_secret_value():
+        providers.append(AnthropicRouter(settings))
+        log.info("modir.llm.anthropic.enabled", model_t1=settings.anthropic_tier1_model)
+    else:
+        log.info("modir.llm.anthropic.skipped", reason="no_api_key")
+
+    if len(providers) == 1:
+        return providers[0]
+    router = FallbackLLMRouter(providers)
+    log.info("modir.llm.fallback_chain.ready", provider_count=len(providers))
+    return router
 
 
 def _configure_langsmith(settings: Settings) -> None:
@@ -89,7 +121,7 @@ async def lifespan(app: FastAPI):
     sessionmaker = async_sessionmaker(
         app.state.db_engine, class_=AsyncSession, expire_on_commit=False
     )
-    app.state.llm_router = GeminiRouter(settings)
+    app.state.llm_router = _build_llm_router(settings, log)
     # Embedding client (Phase 5 RAG). Provider-agnostic, built once; `stub` for dev/CI
     # (offline), `gemini` for the real embedder (keyed by the existing Vault
     # gemini_api_key). Built before the OrderAgent so its search_knowledge_base tool

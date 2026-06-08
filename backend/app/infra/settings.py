@@ -101,13 +101,23 @@ class Settings(BaseSettings):
     )
 
     # LLM provider keys — RESOLVED FROM VAULT, not env. Placeholder here.
+    # Gemini is required; Grok and Anthropic are optional fallbacks (empty = skipped).
     gemini_api_key: SecretStr = Field(default=SecretStr("from-vault"))
+    # Phase 7 — fallback providers. Empty string = provider not configured; the
+    # FallbackLLMRouter skips providers with no key rather than crashing startup.
+    grok_api_key: SecretStr = Field(default=SecretStr(""))
+    anthropic_api_key: SecretStr = Field(default=SecretStr(""))
 
     # LLM model selection (non-secret config). Parsing is Tier 1 work — Flash,
     # not Pro (cheaper, fast enough; see ROADMAP Phase 2 pitfall).
     llm_tier1_model: str = Field(default="gemini-2.5-flash")
     llm_tier2_model: str = Field(default="gemini-2.5-pro")
     llm_max_retries: int = Field(default=2)  # bad tool output → retry, not crash
+    # Phase 7 fallback provider models. Tier 1 = fast/cheap; Tier 2 = stronger.
+    grok_tier1_model: str = Field(default="grok-3-mini")
+    grok_tier2_model: str = Field(default="grok-3")
+    anthropic_tier1_model: str = Field(default="claude-haiku-4-5-20251001")
+    anthropic_tier2_model: str = Field(default="claude-sonnet-4-6")
 
     # LangSmith tracing — key RESOLVED FROM VAULT, not env. Placeholder here.
     langsmith_api_key: SecretStr = Field(default=SecretStr("from-vault"))
