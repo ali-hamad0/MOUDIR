@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Annotated
 from uuid import UUID
 
@@ -19,6 +20,7 @@ from app.infra.logging import get_logger
 from app.infra.security import create_admin_token, verify_password
 from app.infra.settings import Settings, get_settings
 from app.repositories.admins import AdminRepository
+from app.repositories.agent_runs import AgentRunRepository
 from app.repositories.signup_requests import SignupRequestRepository
 from app.services.onboarding import approve_request, reject_request
 
@@ -102,3 +104,31 @@ async def reject_signup_request(
     """Founder-only: reject a request with a reason. Provisions nothing."""
     req = await reject_request(db, admin=admin, request_id=request_id, reason=payload.reason)
     return AdminActionResponse(id=req.id, status=req.status)
+
+
+@router.get("/costs")
+async def get_agent_costs(
+    _admin: CurrentAdmin,
+    db: Db,
+    tenant_id: UUID,
+    from_date: date | None = None,
+    to_date: date | None = None,
+) -> dict[str, dict[str, float]]:
+    """Founder-only: return per-day, per-agent LLM cost estimates for a tenant.
+
+    Response shape: {"YYYY-MM-DD": {"supervisor": 0.001234, "finance": 0.002, ...}}
+
+    The Wall: tenant_id is required — the endpoint cannot return all-tenant data.
+    This is a read-only aggregation endpoint; no writes. Requires admin token.
+    """
+    summary = await AgentRunRepository(db).daily_summary(
+        tenant_id, from_date=from_date, to_date=to_date
+    )
+    log.info(
+        "admin.costs.queried",
+        tenant_id=str(tenant_id),
+        from_date=str(from_date),
+        to_date=str(to_date),
+        days_returned=len(summary),
+    )
+    return {str(d): agents for d, agents in summary.items()}

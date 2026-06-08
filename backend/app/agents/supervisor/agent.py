@@ -29,11 +29,13 @@ from uuid import UUID
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.agents.advisor.agent import AdvisorAgent
 from app.agents.customer.agent import CustomerAgent
 from app.agents.finance.agent import FinanceAgent
 from app.agents.inventory.agent import InventoryAgent
+from app.agents.llm.cost_callback import CostTrackingCallback
 from app.agents.llm.router import LLMRouter
 from app.agents.supervisor.routing import classify_intent
 from app.agents.supervisor.state import SupervisorState
@@ -63,6 +65,7 @@ class OwnerSupervisor:
         customer_agent: CustomerAgent,
         advisor_agent: AdvisorAgent,
         checkpointer=None,  # AsyncPostgresSaver; None disables checkpointing (tests)
+        sessionmaker: async_sessionmaker | None = None,  # for CostTrackingCallback
     ) -> None:
         self._router = router
         self._order_agent = order_agent
@@ -71,6 +74,7 @@ class OwnerSupervisor:
         self._customer_agent = customer_agent
         self._advisor_agent = advisor_agent
         self._checkpointer = checkpointer
+        self._sessionmaker = sessionmaker
         self._graph = self._build_graph()
 
     # ── graph construction ─────────────────────────────────────────────────
@@ -161,7 +165,12 @@ class OwnerSupervisor:
         unrecoverable error (never raises to the caller).
         """
         thread_id = make_thread_id(tenant_id, session_id)
-        config = {"configurable": {"thread_id": thread_id}}
+        callbacks = (
+            [CostTrackingCallback(self._sessionmaker, tenant_id, "supervisor")]
+            if self._sessionmaker is not None
+            else []
+        )
+        config = {"configurable": {"thread_id": thread_id}, "callbacks": callbacks}
         try:
             final: SupervisorState = await self._graph.ainvoke(
                 {

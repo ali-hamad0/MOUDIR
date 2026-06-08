@@ -200,6 +200,7 @@ async def lifespan(app: FastAPI):
         customer_agent=app.state.customer_agent,
         advisor_agent=app.state.advisor_agent,
         checkpointer=app.state.checkpointer,
+        sessionmaker=sessionmaker,
     )
     log.info("modir.supervisor.ready")
     app.state.dispatcher = MessageDispatcher(

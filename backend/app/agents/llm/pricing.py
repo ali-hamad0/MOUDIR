@@ -21,6 +21,10 @@ COST_PER_1K_TOKENS: dict[str, tuple[float, float]] = {
     "claude-sonnet-4-6": (0.00300, 0.01500),
 }
 
+# Model name aliases — the LangChain serializer may emit "models/gemini-*" prefixed names.
+COST_PER_1K_TOKENS["models/gemini-2.5-flash"] = COST_PER_1K_TOKENS["gemini-2.5-flash"]
+COST_PER_1K_TOKENS["models/gemini-2.5-pro"] = COST_PER_1K_TOKENS["gemini-2.5-pro"]
+
 
 def estimate_cost(model_name: str, prompt_tokens: int, completion_tokens: int) -> float:
     """Return estimated cost in USD. Returns 0.0 for unknown model names."""
@@ -28,3 +32,7 @@ def estimate_cost(model_name: str, prompt_tokens: int, completion_tokens: int) -
     if rates is None:
         return 0.0
     return rates[0] * prompt_tokens / 1000 + rates[1] * completion_tokens / 1000
+
+
+# Alias used by CostTrackingCallback (Task 7.9).
+compute_cost = estimate_cost

@@ -10,6 +10,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -764,3 +765,31 @@ class SignupRequest(Base):
     provisioned_tenant_id: Mapped[UUID | None] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True
     )
+
+
+# ── Phase 7 — Cost tracking ─────────────────────────────────────────────────
+
+
+class AgentRun(Base):
+    """One LLM call inside an agent run — token counts + estimated USD cost.
+
+    Written by CostTrackingCallback on every on_llm_end event (Task 7.9).
+    The Wall: tenant_id is non-nullable and indexed; AgentRunRepository always
+    filters by it. Admin endpoint aggregates by day within a tenant.
+    """
+
+    __tablename__ = "agent_runs"
+    __table_args__ = (
+        # Composite index on (tenant_id, created_at) — the Wall on reads plus
+        # the time filter on daily aggregates (AD-7.7).
+        Index("ix_agent_runs_tenant_created", "tenant_id", "created_at"),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    agent_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    model_name: Mapped[str] = mapped_column(String(64), nullable=False)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_usd: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False, default=Decimal("0"))
