@@ -31,6 +31,7 @@ from app.agents.advisor.tools import (
     get_demand_forecast,
     get_todays_snapshot,
 )
+from app.agents.guardrails import check_output
 from app.agents.llm.router import LLMRouter
 from app.infra.logging import get_logger
 from app.infra.settings import Settings
@@ -172,4 +173,14 @@ class AdvisorAgent:
                 {"question": question},
                 config={"configurable": {"ctx": ctx}},
             )
-            return final.get("reply", advisor_agent_ar.FALLBACK_BRIEFING)
+            reply = final.get("reply", advisor_agent_ar.FALLBACK_BRIEFING)
+            rail = check_output(reply, "advisor")
+            if not rail.allowed:
+                log.warning(
+                    "advisor_agent.output_rail",
+                    tenant_id=str(tenant_id),
+                    reason=rail.reason,
+                    matched=rail.matched,
+                )
+                return advisor_agent_ar.FALLBACK_BRIEFING
+            return rail.text or reply

@@ -72,7 +72,7 @@ class MessageDispatcher:
             return await self._supervisor.handle(text or "", identity.tenant.id, session_id)
 
         # --- Input rail (Layer 2) ---
-        rail = check_input(text)
+        rail = check_input(text, role=identity.role)
         if not rail.allowed:
             await self._audit_rail(identity, rail.reason, rail.matched)
             log.info(

@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.agents.finance.schemas import AnomalyResult, RevenueSummary
 from app.agents.finance.tools import ToolContext, compose_reply, flag_anomalies, get_revenue_summary
+from app.agents.guardrails import check_output
 from app.agents.llm.router import LLMRouter
 from app.infra.logging import get_logger
 from app.infra.settings import Settings
@@ -117,4 +118,14 @@ class FinanceAgent:
                 {"question": question, "days": days},
                 config={"configurable": {"ctx": ctx}},
             )
-            return final.get("reply", finance_agent_ar.FALLBACK_REPLY)
+            reply = final.get("reply", finance_agent_ar.FALLBACK_REPLY)
+            rail = check_output(reply, "finance")
+            if not rail.allowed:
+                log.warning(
+                    "finance_agent.output_rail",
+                    tenant_id=str(tenant_id),
+                    reason=rail.reason,
+                    matched=rail.matched,
+                )
+                return finance_agent_ar.FALLBACK_REPLY
+            return rail.text or reply

@@ -29,6 +29,7 @@ from app.agents.customer.tools import (
     get_churn_risks,
     queue_reengagement,
 )
+from app.agents.guardrails import check_output
 from app.agents.llm.router import LLMRouter
 from app.infra.logging import get_logger
 from app.infra.settings import Settings
@@ -142,4 +143,14 @@ class CustomerAgent:
             )
             if final.get("queued_action") is not None:
                 await session.commit()
-            return final.get("reply", customer_agent_ar.FALLBACK_REPLY)
+            reply = final.get("reply", customer_agent_ar.FALLBACK_REPLY)
+            rail = check_output(reply, "customer")
+            if not rail.allowed:
+                log.warning(
+                    "customer_agent.output_rail",
+                    tenant_id=str(tenant_id),
+                    reason=rail.reason,
+                    matched=rail.matched,
+                )
+                return customer_agent_ar.FALLBACK_REPLY
+            return rail.text or reply

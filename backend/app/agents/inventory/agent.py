@@ -21,6 +21,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app.agents.guardrails import check_output
 from app.agents.inventory.tools import (
     ToolContext,
     check_stock,
@@ -179,4 +180,6 @@ class InventoryAgent:
                 tenant_id=str(tenant_id),
                 count=len(low_stock),
             )
-            return "\n".join(lines)
+            reply = "\n".join(lines)
+            rail = check_output(reply, "inventory")
+            return rail.text or reply
