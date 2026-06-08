@@ -1,8 +1,8 @@
 """AgentRun repository — cost tracking for per-LLM-call rows (Task 7.9).
 
-The Wall is enforced here: every read filters by tenant_id. The admin endpoint
-aggregates within a tenant; the callback writes within a tenant. No cross-tenant
-query exists in this repository.
+The Wall is enforced here: every read filters by tenant_id via the
+TenantScopedRepository base. The admin endpoint aggregates within a tenant;
+the callback writes within a tenant. No cross-tenant query exists here.
 """
 
 from datetime import date
@@ -10,17 +10,16 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import cast, func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.types import Date
 
 from app.db.models import AgentRun
+from app.repositories.base import TenantScopedRepository
 
 
-class AgentRunRepository:
+class AgentRunRepository(TenantScopedRepository[AgentRun]):
     """Tenant-scoped reads and writes for the agent_runs table."""
 
-    def __init__(self, session: AsyncSession) -> None:
-        self._session = session
+    model = AgentRun
 
     async def create(
         self,

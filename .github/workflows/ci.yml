@@ -86,6 +86,14 @@ jobs:
         # failed. No DB/Vault needed — it loads artifacts + golden JSON straight from disk.
         run: uv run python -m app.ml.eval
 
+      - name: Routing golden evals (offline mock)
+        working-directory: ./backend
+        # Phase 7 (Task 7.10): run the 26 Arabic routing queries through the offline
+        # mock LLM (pre-programmed, deterministic, no network). Exits 1 if overall
+        # accuracy < 0.85 or any per-class accuracy < 0.70.
+        # Set ROUTING_EVAL_REAL_LLM=1 locally to test with the real Gemini LLM.
+        run: uv run python -m app.agents.eval.evaluate_routing
+
       - name: Forbidden patterns check
         run: |
           # Scan only .py source (never compiled __pycache__ bytecode) and match
