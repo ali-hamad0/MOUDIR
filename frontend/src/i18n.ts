@@ -40,7 +40,15 @@ export const t = {
   navInventory: "المخزون",
   navReorders: "موافقات الشرا",
   navInsights: "التوقعات",
+  navChat: "المحادثة",
   navSetup: "ضبط المحل",
+  // Owner chat panel
+  chatTitle: "المحادثة مع مودير",
+  chatPlaceholder: "اكتب سؤالك هون...",
+  chatSend: "إرسال",
+  chatSending: "عم نبعت...",
+  chatError: "ما قدرنا نبعت الرسالة. جرّب مرة تانية.",
+  chatWelcome: "أهلاً! كيف فيني ساعدك اليوم؟",
   // App shell / whoami
   shop: "المحل",
   plan: "الباقة",

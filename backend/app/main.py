@@ -21,6 +21,7 @@ from app.api import (
     approvals,
     auth,
     bills,
+    chat,
     customers,
     inventory,
     me,
@@ -289,6 +290,7 @@ def create_app() -> FastAPI:
     app.include_router(customers.router)
     app.include_router(me.router)
     app.include_router(predictions.router)
+    app.include_router(chat.router)
     app.include_router(webhooks.router)
 
     return app

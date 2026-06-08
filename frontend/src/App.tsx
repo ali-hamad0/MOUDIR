@@ -14,6 +14,7 @@ import InsightsPage from "./pages/InsightsPage";
 import InventoryPage from "./pages/InventoryPage";
 import LoginPage from "./pages/LoginPage";
 import OrdersPage from "./pages/OrdersPage";
+import OwnerChatPage from "./pages/OwnerChatPage";
 import ReordersPage from "./pages/ReordersPage";
 import SetupWizard from "./pages/SetupWizard";
 import SignupPage from "./pages/SignupPage";
@@ -41,6 +42,7 @@ export default function App() {
             }
           >
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/chat" element={<OwnerChatPage />} />
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/bills" element={<BillsPage />} />
