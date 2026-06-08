@@ -11,7 +11,7 @@ see no change. Adding a provider is a change in the provider list passed to
 FallbackLLMRouter, never in any agent, service, or tool.
 """
 
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from langchain_core.language_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -19,6 +19,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from app.infra.settings import Settings
 
 
+@runtime_checkable
 class LLMRouter(Protocol):
     """The only way app code obtains a chat model.
 

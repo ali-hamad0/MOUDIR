@@ -55,7 +55,9 @@ async def build_checkpointer(
     not yet exist — it is idempotent and safe to call on every startup.
     """
     conn_str = _psycopg_conn_str(str(database_url))
-    pool = AsyncConnectionPool(conn_str, open=False)
+    # autocommit=True is required: AsyncPostgresSaver.setup() issues
+    # CREATE INDEX CONCURRENTLY which Postgres forbids inside a transaction.
+    pool = AsyncConnectionPool(conn_str, open=False, kwargs={"autocommit": True})
     await pool.open()
     checkpointer = AsyncPostgresSaver(pool)
     await checkpointer.setup()
