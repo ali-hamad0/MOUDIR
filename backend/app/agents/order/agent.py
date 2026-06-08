@@ -20,6 +20,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from app.agents.guardrails import check_output
 from app.agents.llm.router import LLMRouter
 from app.agents.order.schemas import ParsedOrder
 from app.agents.order.tools import (
@@ -155,4 +156,14 @@ class OrderAgent:
             final: _OrderState = await self._graph.ainvoke(
                 {"text": text}, config={"configurable": {"ctx": ctx}}
             )
-            return final.get("reply", order_ar.DID_NOT_UNDERSTAND)
+            reply = final.get("reply", order_ar.DID_NOT_UNDERSTAND)
+            rail = check_output(reply, "order")
+            if not rail.allowed:
+                log.warning(
+                    "order_agent.output_rail",
+                    tenant_id=str(identity.tenant.id),
+                    reason=rail.reason,
+                    matched=rail.matched,
+                )
+                return order_ar.DID_NOT_UNDERSTAND
+            return rail.text or reply

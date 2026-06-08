@@ -118,6 +118,15 @@ export function InsightsIcon(props: IconProps) {
   );
 }
 
+// Owner chat panel — a speech bubble for the WhatsApp-style chat UI.
+export function ChatIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 export function LogoutIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>

@@ -18,10 +18,16 @@ measurable per tenant). Wiring into the dispatcher happens in Task 2.11.
 import re
 from dataclasses import dataclass, field
 
-# Phone-number-ish runs (Lebanese +961..., or any 7+ digit run). Redacted from
-# outgoing text so a reply never echoes a number back (constitution III).
-_PHONE_RE = re.compile(r"\+?\d[\d\s\-]{6,}\d")
+# Phone-number-ish runs. Explicit Lebanese formats first, then the generic
+# fallback so e.g. "+961 70 123456" and "03-123456" are all caught.
+_PHONE_RE = re.compile(
+    r"\+961[\s\-]?\d{1,2}[\s\-]?\d{6}"  # +961 X XXXXXX  (Lebanese intl.)
+    r"|0\d[\-\s]\d{6}"  # 0X-XXXXXX  (Lebanese local)
+    r"|\+?\d[\d\s\-]{6,}\d"  # generic international
+)
 _PHONE_REDACTION = "[رقم]"
+
+_MAX_INPUT_LENGTH = 4000
 
 # Injection / jailbreak / cross-tenant-probe markers, Arabic + English. Kept as
 # substrings (lowercased compare) — deliberately simple and auditable. A real
@@ -33,6 +39,7 @@ _INJECTION_MARKERS: tuple[str, ...] = (
     "ignore previous",
     "disregard your",
     "system prompt",
+    "system:",  # system-message injection via colon prefix
     "reveal your prompt",
     "show me all orders",
     "all customers",
@@ -41,15 +48,21 @@ _INJECTION_MARKERS: tuple[str, ...] = (
     "act as",
     "you are now",
     "developer mode",
-    # Arabic equivalents
+    # Arabic equivalents and transliterations
     "تجاهل التعليمات",
     "تجاهل تعليماتك",
+    "تجاهل ما سبق",  # ignore what came before
+    "تجاهل السابق",  # ignore previous (alt)
     "كل الطلبات",
     "كل الزباين",
     "كل الزبائن",
     "الزبون السابق",
     "اكشف",
     "التعليمات السرية",
+    "نظام:",  # Arabic "system:" transliteration
+    "أنت الآن",  # "you are now" in Arabic
+    "تصرف كـ",  # "act as" in Arabic
+    "وضع المطور",  # "developer mode" in Arabic
 )
 
 
@@ -67,18 +80,26 @@ class RailResult:
     matched: list[str] = field(default_factory=list)
 
 
-def check_input(text: str | None) -> RailResult:
+def check_input(text: str | None, role: str = "customer") -> RailResult:
     """Input rail: refuse injection / jailbreak / cross-tenant probing.
 
-    Returns allowed=False with a reason when a marker is found; the caller then
-    replies with order_ar.RAIL_REFUSAL and does NOT run the agent.
+    `role` is recorded for audit; it does not change the blocking logic.
+    Long inputs (≥ 4000 chars) are truncated before pattern matching — the
+    truncated text is returned in `result.text` so the caller can use it.
+    Returns allowed=False with a reason when an injection marker is found.
     """
     if not text:
         return RailResult(allowed=True)
+    truncated = False
+    if len(text) >= _MAX_INPUT_LENGTH:
+        text = text[:_MAX_INPUT_LENGTH]
+        truncated = True
     lowered = text.lower()
     hits = [m for m in _INJECTION_MARKERS if m.lower() in lowered]
     if hits:
         return RailResult(allowed=False, reason="input.injection", matched=hits)
+    if truncated:
+        return RailResult(allowed=True, reason="input.truncated", text=text)
     return RailResult(allowed=True)
 
 
@@ -88,28 +109,29 @@ def redact_pii(text: str) -> str:
 
 
 def check_output(
-    reply: str,
-    catalog_names: set[str],
+    text: str,
+    agent_name: str,
     *,
+    catalog_items: set[str] | None = None,
     referenced_names: set[str] | None = None,
 ) -> RailResult:
     """Output rail: reject a hallucinated catalog item, then redact PII.
 
-    `catalog_names` — the real product names for this tenant.
-    `referenced_names` — the product names this reply claims to have ordered
-        (passed by the caller from the confirmed order). If ANY of them is not in
-        `catalog_names`, the reply is hallucinating a product → blocked.
+    `agent_name` — which agent produced this reply (for audit logging).
+    `catalog_items` — the real product names for this tenant. Required when
+        `referenced_names` is provided.
+    `referenced_names` — product names this reply claims to reference. If ANY
+        is not in `catalog_items`, the reply is hallucinating a product → blocked.
 
-    Phase 2 confirmations are template-based and only reference catalog-validated
-    items, so this rail should pass in normal operation; it is the backstop that
-    makes "no hallucinated catalog item" an enforced output check, not just an
-    upstream guarantee. When `referenced_names` is None there is nothing to verify
-    (e.g. a refusal/clarification reply) and only PII redaction applies.
+    When `catalog_items` is None (Finance, Customer, Advisor agents have no
+    per-call catalog context) only PII redaction applies. This is intentional:
+    the hallucination check is the backstop for order confirmations; for analytic
+    replies the LLM synthesises ML numbers, not product names.
     """
-    if referenced_names:
-        hallucinated = sorted(referenced_names - catalog_names)
+    if referenced_names and catalog_items is not None:
+        hallucinated = sorted(referenced_names - catalog_items)
         if hallucinated:
             return RailResult(
                 allowed=False, reason="output.hallucinated_item", matched=hallucinated
             )
-    return RailResult(allowed=True, text=redact_pii(reply))
+    return RailResult(allowed=True, text=redact_pii(text))

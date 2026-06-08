@@ -5,16 +5,23 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.agents.advisor.agent import AdvisorAgent
+from app.agents.customer.agent import CustomerAgent
+from app.agents.finance.agent import FinanceAgent
 from app.agents.inventory.agent import InventoryAgent
-from app.agents.llm.router import GeminiRouter
+from app.agents.llm.anthropic_router import AnthropicRouter
+from app.agents.llm.grok_router import GrokRouter
+from app.agents.llm.router import FallbackLLMRouter, GeminiRouter, LLMRouter
 from app.agents.ocr.agent import BillExtractionAgent
 from app.agents.order.agent import OrderAgent
+from app.agents.supervisor.agent import OwnerSupervisor
 from app.api import (
     activation,
     admin,
     approvals,
     auth,
     bills,
+    chat,
     customers,
     inventory,
     me,
@@ -27,6 +34,7 @@ from app.api import (
 )
 from app.db.session import create_engine
 from app.infra.bill_committer import BillCommitter
+from app.infra.checkpointer import build_checkpointer
 from app.infra.embeddings import build_embedding_client
 from app.infra.logging import configure_logging, get_logger
 from app.infra.ocr import build_ocr_engine
@@ -40,6 +48,36 @@ from app.ml.predictors import (
     build_demand_predictor,
 )
 from app.services.dispatcher import MessageDispatcher
+
+
+def _build_llm_router(settings: Settings, log) -> LLMRouter:
+    """Build the LLM router, adding optional fallback providers when keyed.
+
+    Gemini is always included (required). Grok and Anthropic are added only when
+    their keys are non-empty (resolved from Vault — absent keys are logged as info
+    at startup and those providers are skipped, not crashed). The result is a
+    FallbackLLMRouter when multiple providers are available, or just GeminiRouter
+    when only Gemini is configured (avoids the with_fallbacks wrapper overhead).
+    """
+    providers: list[LLMRouter] = [GeminiRouter(settings)]
+
+    if settings.grok_api_key.get_secret_value():
+        providers.append(GrokRouter(settings))
+        log.info("modir.llm.grok.enabled", model_t1=settings.grok_tier1_model)
+    else:
+        log.info("modir.llm.grok.skipped", reason="no_api_key")
+
+    if settings.anthropic_api_key.get_secret_value():
+        providers.append(AnthropicRouter(settings))
+        log.info("modir.llm.anthropic.enabled", model_t1=settings.anthropic_tier1_model)
+    else:
+        log.info("modir.llm.anthropic.skipped", reason="no_api_key")
+
+    if len(providers) == 1:
+        return providers[0]
+    router = FallbackLLMRouter(providers)
+    log.info("modir.llm.fallback_chain.ready", provider_count=len(providers))
+    return router
 
 
 def _configure_langsmith(settings: Settings) -> None:
@@ -89,7 +127,7 @@ async def lifespan(app: FastAPI):
     sessionmaker = async_sessionmaker(
         app.state.db_engine, class_=AsyncSession, expire_on_commit=False
     )
-    app.state.llm_router = GeminiRouter(settings)
+    app.state.llm_router = _build_llm_router(settings, log)
     # Embedding client (Phase 5 RAG). Provider-agnostic, built once; `stub` for dev/CI
     # (offline), `gemini` for the real embedder (keyed by the existing Vault
     # gemini_api_key). Built before the OrderAgent so its search_knowledge_base tool
@@ -111,6 +149,12 @@ async def lifespan(app: FastAPI):
     app.state.churn_predictor = build_churn_predictor(settings)
     app.state.anomaly_detector = build_anomaly_detector(settings)
     log.info("modir.ml.predictors.ready", ml_mode=settings.ml_mode)
+    # LangGraph Postgres checkpointer (Task 7.2). Persists supervisor conversation
+    # state so a mid-flight owner session resumes after a process restart. The pool
+    # is closed in the shutdown block below. LangGraph owns its own tables (created
+    # by checkpointer.setup()) — they are NOT in our Alembic migrations.
+    app.state.checkpointer, _checkpoint_pool = await build_checkpointer(str(settings.database_url))
+    log.info("modir.checkpointer.ready")
     # The InventoryAgent mirrors the OrderAgent: built once, opens its own session
     # per call. Task 4.9 reaches it via app.state.inventory_agent to draft a reorder
     # PO inline when order completion drops stock below threshold. Task 6.7 hands it the
@@ -118,11 +162,51 @@ async def lifespan(app: FastAPI):
     app.state.inventory_agent = InventoryAgent(
         app.state.llm_router, settings, sessionmaker, app.state.demand_predictor
     )
+    # The FinanceAgent mirrors the InventoryAgent: built once, opens its own session
+    # per call. The supervisor (Task 7.6) will route finance questions to it via
+    # app.state.finance_agent. Read-only: no HIL gate. The anomaly_detector is the
+    # same lifespan singleton used by the /predictions/* API (Task 6.10).
+    app.state.finance_agent = FinanceAgent(
+        app.state.llm_router, settings, sessionmaker, app.state.anomaly_detector
+    )
+    # The AdvisorAgent is read-only: no HIL, no commit. It synthesizes all three Phase 6
+    # ML predictors + live DB reads into a Lebanese Arabic morning briefing (Task 7.5).
+    # Constitution IV: ML models produce the numbers; Tier 2 LLM only explains them.
+    app.state.advisor_agent = AdvisorAgent(
+        app.state.llm_router,
+        settings,
+        sessionmaker,
+        demand_predictor=app.state.demand_predictor,
+        churn_predictor=app.state.churn_predictor,
+        anomaly_detector=app.state.anomaly_detector,
+    )
+    # The CustomerAgent mirrors the FinanceAgent: built once, opens its own session
+    # per call. Constitution V: queue_reengagement writes a draft for HIL approval —
+    # there is NO send path in Phase 7. Phase 10 (Meta API) adds it.
+    app.state.customer_agent = CustomerAgent(
+        app.state.llm_router, settings, sessionmaker, app.state.churn_predictor
+    )
     # The BillExtractionAgent mirrors the other agents: built once, opens its own
     # session per call. The OCR worker (Task 5.8) reaches it via
     # app.state.bill_agent to structure an uploaded bill's OCR text into a BillData.
     app.state.bill_agent = BillExtractionAgent(app.state.llm_router, settings, sessionmaker)
-    app.state.dispatcher = MessageDispatcher(app.state.order_agent, sessionmaker)
+    # The OwnerSupervisor wires all five specialist agents under one LangGraph
+    # (Task 7.6). Built AFTER all agents are ready; attached to the Postgres
+    # checkpointer so conversation state survives container restarts (AD-7.2).
+    app.state.supervisor = OwnerSupervisor(
+        router=app.state.llm_router,
+        order_agent=app.state.order_agent,
+        inventory_agent=app.state.inventory_agent,
+        finance_agent=app.state.finance_agent,
+        customer_agent=app.state.customer_agent,
+        advisor_agent=app.state.advisor_agent,
+        checkpointer=app.state.checkpointer,
+        sessionmaker=sessionmaker,
+    )
+    log.info("modir.supervisor.ready")
+    app.state.dispatcher = MessageDispatcher(
+        app.state.order_agent, sessionmaker, supervisor=app.state.supervisor
+    )
     # The supplier dispatcher is built once here (like EmailSender / the agents):
     # the approvals API (Task 4.12) fires its `dispatch` as a background task after
     # an approve commits. It opens its OWN session per call from this sessionmaker,
@@ -152,10 +236,15 @@ async def lifespan(app: FastAPI):
         ocr_mode=settings.ocr_mode,
         embedding_mode=settings.embedding_mode,
         ml_mode=settings.ml_mode,
+        finance_agent="ready",
+        customer_agent="ready",
+        advisor_agent="ready",
     )
 
     yield
 
+    await _checkpoint_pool.close()
+    log.info("modir.checkpointer.closed")
     await app.state.db_engine.dispose()
     log.info("modir.db.engine.disposed")
 
@@ -201,6 +290,7 @@ def create_app() -> FastAPI:
     app.include_router(customers.router)
     app.include_router(me.router)
     app.include_router(predictions.router)
+    app.include_router(chat.router)
     app.include_router(webhooks.router)
 
     return app

@@ -1,4 +1,5 @@
 from typing import Protocol
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -6,6 +7,7 @@ from app.agents.guardrails import check_input, redact_pii
 from app.db.models import Customer
 from app.domain.identity import ResolvedIdentity
 from app.infra.logging import get_logger
+from app.infra.session import make_session_id
 from app.services.audit import AuditService
 from app.services.customer_enrichment import CustomerEnrichmentService
 from prompts import order_ar
@@ -23,22 +25,39 @@ class OrderAgentLike(Protocol):
     async def handle(self, text: str, identity: ResolvedIdentity) -> str: ...
 
 
+class OwnerSupervisorLike(Protocol):
+    """The slice of the OwnerSupervisor the dispatcher needs (Task 7.7).
+
+    The dispatcher types against this Protocol so tests can inject any async
+    callable with the right signature — not the concrete supervisor.
+    """
+
+    async def handle(self, message: str, tenant_id: UUID, session_id: str) -> str: ...
+
+
 class MessageDispatcher:
     """Routes an inbound message by resolved role and wraps the customer path in
     the Layer 2 guardrails.
 
-    Phase 2 implements the customer path; the owner path is a placeholder until
-    Phase 7's supervisor. The OrderAgent is intentionally NOT reachable on the
-    owner branch — tool allowlists are role-specific, enforced in code.
+    The customer path goes to OrderAgent (unchanged from Phase 2).
+    The owner path goes to OwnerSupervisor (Task 7.7); falls back to the
+    OWNER_PLACEHOLDER when no supervisor is wired (pre-Phase 7 behaviour,
+    preserved so older tests and cold starts stay valid).
 
     Flow (customer):  input rail → agent → output PII redaction → reply.
     A tripped rail is audit-logged with tenant_id (GUARDRAILS.md) and the agent
     does NOT run.
     """
 
-    def __init__(self, order_agent: OrderAgentLike, sessionmaker: async_sessionmaker) -> None:
+    def __init__(
+        self,
+        order_agent: OrderAgentLike,
+        sessionmaker: async_sessionmaker,
+        supervisor: OwnerSupervisorLike | None = None,
+    ) -> None:
         self._order_agent = order_agent
         self._sessionmaker = sessionmaker
+        self._supervisor = supervisor
 
     async def dispatch(self, text: str | None, identity: ResolvedIdentity) -> str:
         log.info(
@@ -47,11 +66,13 @@ class MessageDispatcher:
             role=identity.role,
         )
         if identity.role == "owner":
-            # The agent and its tools are not even referenced here.
-            return order_ar.OWNER_PLACEHOLDER
+            if self._supervisor is None:
+                return order_ar.OWNER_PLACEHOLDER
+            session_id = make_session_id(identity)
+            return await self._supervisor.handle(text or "", identity.tenant.id, session_id)
 
         # --- Input rail (Layer 2) ---
-        rail = check_input(text)
+        rail = check_input(text, role=identity.role)
         if not rail.allowed:
             await self._audit_rail(identity, rail.reason, rail.matched)
             log.info(

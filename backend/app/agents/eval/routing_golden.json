@@ -1,0 +1,132 @@
+[
+  {
+    "query_ar": "كم طلب وصلني اليوم؟",
+    "expected_agent": "order",
+    "notes": "clear order count query"
+  },
+  {
+    "query_ar": "شو حالة الطلبات؟",
+    "expected_agent": "order",
+    "notes": "order status query"
+  },
+  {
+    "query_ar": "كم طلب معلق عندي هلق؟",
+    "expected_agent": "order",
+    "notes": "pending orders query"
+  },
+  {
+    "query_ar": "شو أكثر شي اتطلب اليوم؟",
+    "expected_agent": "order",
+    "notes": "most ordered item today"
+  },
+  {
+    "query_ar": "كم طلب وصل هالأسبوع؟",
+    "expected_agent": "order",
+    "notes": "weekly order volume"
+  },
+  {
+    "query_ar": "شو المنتجات قريبة تنتهي؟",
+    "expected_agent": "inventory",
+    "notes": "low stock alert query"
+  },
+  {
+    "query_ar": "كم باقي من الكعكات؟",
+    "expected_agent": "inventory",
+    "notes": "specific product stock query"
+  },
+  {
+    "query_ar": "مخزوني كيف؟",
+    "expected_agent": "inventory",
+    "notes": "general inventory status"
+  },
+  {
+    "query_ar": "لازم أطلب بضاعة من المورد؟",
+    "expected_agent": "inventory",
+    "notes": "reorder decision query"
+  },
+  {
+    "query_ar": "شو ناقصنا بالمستودع؟",
+    "expected_agent": "inventory",
+    "notes": "warehouse shortage query"
+  },
+  {
+    "query_ar": "كيف مبيعاتي اليوم؟",
+    "expected_agent": "finance",
+    "notes": "daily sales query"
+  },
+  {
+    "query_ar": "قديش ربحت هالأسبوع؟",
+    "expected_agent": "finance",
+    "notes": "weekly revenue query"
+  },
+  {
+    "query_ar": "شو الإيرادات هالشهر؟",
+    "expected_agent": "finance",
+    "notes": "monthly revenue query"
+  },
+  {
+    "query_ar": "في شي غريب بالمبيعات؟",
+    "expected_agent": "finance",
+    "notes": "revenue anomaly detection query"
+  },
+  {
+    "query_ar": "مبيعاتي أحسن من الأسبوع الماضي؟",
+    "expected_agent": "finance",
+    "notes": "week-over-week comparison"
+  },
+  {
+    "query_ar": "مين الزبائن اللي مش راجعين؟",
+    "expected_agent": "customer",
+    "notes": "churn risk query"
+  },
+  {
+    "query_ar": "في زبائن بخطر؟",
+    "expected_agent": "customer",
+    "notes": "at-risk customers query"
+  },
+  {
+    "query_ar": "بدي أرسل رسالة لزبون مش رح يرجع",
+    "expected_agent": "customer",
+    "notes": "re-engagement intent"
+  },
+  {
+    "query_ar": "شو أخبار زبائني؟",
+    "expected_agent": "customer",
+    "notes": "customer status overview"
+  },
+  {
+    "query_ar": "مين ما اشترى من زمان؟",
+    "expected_agent": "customer",
+    "notes": "lapsed customers query"
+  },
+  {
+    "query_ar": "كيف يومي رح يكون؟",
+    "expected_agent": "advisor",
+    "notes": "morning briefing request"
+  },
+  {
+    "query_ar": "إيش تنصحني؟",
+    "expected_agent": "advisor",
+    "notes": "general strategic advice"
+  },
+  {
+    "query_ar": "عطيني ملخص صباحي",
+    "expected_agent": "advisor",
+    "notes": "daily summary request"
+  },
+  {
+    "query_ar": "شو الوضع العام بالمحل؟",
+    "expected_agent": "advisor",
+    "notes": "general situation overview"
+  },
+  {
+    "query_ar": "فيك تساعدني؟",
+    "expected_agent": "advisor",
+    "notes": "ambiguous help request - default to advisor"
+  },
+  {
+    "query_ar": "مرحبا، كيف الأمور؟",
+    "expected_agent": "advisor",
+    "notes": "ambiguous greeting - default to advisor"
+  }
+]
