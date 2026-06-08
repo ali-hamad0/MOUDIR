@@ -477,6 +477,55 @@ class PurchaseOrderEvent(Base):
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+# ── Phase 7 — CustomerAgent HIL artifact ────────────────────────────────────
+
+
+class PendingReengagement(Base):
+    """A drafted customer re-engagement message queued for HIL approval.
+
+    The Wall (constitution I): non-nullable, indexed tenant_id; every repository
+    method filters by it. References the tenant's own `customers` row.
+
+    Status lifecycle (single source of truth for the owner's inbox)::
+
+        draft ──approve (Phase 10)──► approved ──send (Meta API, Phase 10)──► sent
+          │
+          └──reject──► rejected
+
+    - draft    — the agent proposed it; awaiting human review. NEVER sent.
+    - approved — the owner approved; Phase 10 will send via the Meta API.
+    - rejected — the owner declined.
+    - sent     — Phase 10: message delivered to the customer (not Phase 7).
+
+    ⚠️ Like PurchaseOrder, `status` is the lifecycle MARKER for the UI — it is
+    NOT the security gate. Sending is Phase 10 and is gated by a signed approval
+    token (the same ActionGate). A status flip must never trigger a send without
+    a valid token (constitution V).
+
+    The `action_key` (`"send_reengagement:{tenant_id}:{customer_id}"`) is also
+    the idempotency key: the tool checks for an existing draft before creating
+    a new one, preventing duplicate queuing.
+    """
+
+    __tablename__ = "pending_reengagements"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True
+    )
+    customer_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True
+    )
+    # Snapshot of the customer's display name at draft time (for inbox display).
+    customer_name_ar: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # The LLM-drafted Lebanese Arabic re-engagement message (not yet sent).
+    draft_message_ar: Mapped[str] = mapped_column(Text, nullable=False)
+    # Idempotency key: "send_reengagement:{tenant_id}:{customer_id}".
+    # Also the action string for ActionGate.authorize in Phase 10.
+    action_key: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    # "draft" | "approved" | "rejected" | "sent" (sent is Phase 10)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft")
+
+
 # ── Phase 5 — Supplier bills (OCR artifact) ─────────────────────────────────
 
 

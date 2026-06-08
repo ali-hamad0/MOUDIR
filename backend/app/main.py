@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.agents.customer.agent import CustomerAgent
 from app.agents.finance.agent import FinanceAgent
 from app.agents.inventory.agent import InventoryAgent
 from app.agents.llm.anthropic_router import AnthropicRouter
@@ -165,6 +166,12 @@ async def lifespan(app: FastAPI):
     app.state.finance_agent = FinanceAgent(
         app.state.llm_router, settings, sessionmaker, app.state.anomaly_detector
     )
+    # The CustomerAgent mirrors the FinanceAgent: built once, opens its own session
+    # per call. Constitution V: queue_reengagement writes a draft for HIL approval —
+    # there is NO send path in Phase 7. Phase 10 (Meta API) adds it.
+    app.state.customer_agent = CustomerAgent(
+        app.state.llm_router, settings, sessionmaker, app.state.churn_predictor
+    )
     # The BillExtractionAgent mirrors the other agents: built once, opens its own
     # session per call. The OCR worker (Task 5.8) reaches it via
     # app.state.bill_agent to structure an uploaded bill's OCR text into a BillData.
@@ -200,6 +207,7 @@ async def lifespan(app: FastAPI):
         embedding_mode=settings.embedding_mode,
         ml_mode=settings.ml_mode,
         finance_agent="ready",
+        customer_agent="ready",
     )
 
     yield
