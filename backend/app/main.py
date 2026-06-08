@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.agents.advisor.agent import AdvisorAgent
 from app.agents.customer.agent import CustomerAgent
 from app.agents.finance.agent import FinanceAgent
 from app.agents.inventory.agent import InventoryAgent
@@ -166,6 +167,17 @@ async def lifespan(app: FastAPI):
     app.state.finance_agent = FinanceAgent(
         app.state.llm_router, settings, sessionmaker, app.state.anomaly_detector
     )
+    # The AdvisorAgent is read-only: no HIL, no commit. It synthesizes all three Phase 6
+    # ML predictors + live DB reads into a Lebanese Arabic morning briefing (Task 7.5).
+    # Constitution IV: ML models produce the numbers; Tier 2 LLM only explains them.
+    app.state.advisor_agent = AdvisorAgent(
+        app.state.llm_router,
+        settings,
+        sessionmaker,
+        demand_predictor=app.state.demand_predictor,
+        churn_predictor=app.state.churn_predictor,
+        anomaly_detector=app.state.anomaly_detector,
+    )
     # The CustomerAgent mirrors the FinanceAgent: built once, opens its own session
     # per call. Constitution V: queue_reengagement writes a draft for HIL approval —
     # there is NO send path in Phase 7. Phase 10 (Meta API) adds it.
@@ -208,6 +220,7 @@ async def lifespan(app: FastAPI):
         ml_mode=settings.ml_mode,
         finance_agent="ready",
         customer_agent="ready",
+        advisor_agent="ready",
     )
 
     yield
