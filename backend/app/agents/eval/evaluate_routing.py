@@ -91,7 +91,7 @@ async def _run_eval(golden: list[dict], llm) -> tuple[float, dict[str, float]]:
             correct += 1
         per_class.setdefault(expected, []).append(ok)
         status = "OK" if ok else f"FAIL (got {got!r})"
-        print(f"  [{expected:9s}] {status}  {query[:50]}")
+        sys.stdout.write(f"  [{expected:9s}] {status}  {query[:50]}\n")
 
     overall = correct / len(golden) if golden else 0.0
     per_class_acc = {cls: sum(results) / len(results) for cls, results in per_class.items()}
@@ -107,14 +107,14 @@ def _check_thresholds(
     overall_min: float = thresholds.get("overall_accuracy_min", 0.85)
     per_class_min: float = thresholds.get("per_class_min", 0.70)
 
-    print(f"\nOverall accuracy : {overall:.1%}  (min {overall_min:.0%})")
+    sys.stdout.write(f"\nOverall accuracy : {overall:.1%}  (min {overall_min:.0%})\n")
     passed = overall >= overall_min
 
-    print("Per-class accuracy:")
+    sys.stdout.write("Per-class accuracy:\n")
     for cls, acc in sorted(per_class.items()):
         ok = acc >= per_class_min
         mark = "OK" if ok else "FAIL"
-        print(f"  {mark:4s} {cls:9s}: {acc:.1%}  (min {per_class_min:.0%})")
+        sys.stdout.write(f"  {mark:4s} {cls:9s}: {acc:.1%}  (min {per_class_min:.0%})\n")
         if not ok:
             passed = False
 
@@ -132,20 +132,20 @@ async def _main() -> int:
 
         settings = get_settings()
         llm = GeminiRouter(settings).tier1()
-        print("Running with REAL Gemini LLM (charges apply)\n")
+        sys.stdout.write("Running with REAL Gemini LLM (charges apply)\n\n")
     else:
         llm = _OfflineMockLLM(golden)
-        print("Running with offline mock LLM (CI mode)\n")
+        sys.stdout.write("Running with offline mock LLM (CI mode)\n\n")
 
-    print(f"Golden set: {len(golden)} queries\n")
+    sys.stdout.write(f"Golden set: {len(golden)} queries\n\n")
     overall, per_class = await _run_eval(golden, llm)
     passed = _check_thresholds(overall, per_class, thresholds)
 
     if passed:
-        print("\nAll routing thresholds passed.")
+        sys.stdout.write("\nAll routing thresholds passed.\n")
         return 0
     else:
-        print("\nRouting accuracy below threshold — see failures above.")
+        sys.stdout.write("\nRouting accuracy below threshold — see failures above.\n")
         return 1
 
 
