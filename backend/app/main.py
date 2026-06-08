@@ -202,7 +202,9 @@ async def lifespan(app: FastAPI):
         checkpointer=app.state.checkpointer,
     )
     log.info("modir.supervisor.ready")
-    app.state.dispatcher = MessageDispatcher(app.state.order_agent, sessionmaker)
+    app.state.dispatcher = MessageDispatcher(
+        app.state.order_agent, sessionmaker, supervisor=app.state.supervisor
+    )
     # The supplier dispatcher is built once here (like EmailSender / the agents):
     # the approvals API (Task 4.12) fires its `dispatch` as a background task after
     # an approve commits. It opens its OWN session per call from this sessionmaker,
