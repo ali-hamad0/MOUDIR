@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.agents.finance.agent import FinanceAgent
 from app.agents.inventory.agent import InventoryAgent
 from app.agents.llm.anthropic_router import AnthropicRouter
 from app.agents.llm.grok_router import GrokRouter
@@ -157,6 +158,13 @@ async def lifespan(app: FastAPI):
     app.state.inventory_agent = InventoryAgent(
         app.state.llm_router, settings, sessionmaker, app.state.demand_predictor
     )
+    # The FinanceAgent mirrors the InventoryAgent: built once, opens its own session
+    # per call. The supervisor (Task 7.6) will route finance questions to it via
+    # app.state.finance_agent. Read-only: no HIL gate. The anomaly_detector is the
+    # same lifespan singleton used by the /predictions/* API (Task 6.10).
+    app.state.finance_agent = FinanceAgent(
+        app.state.llm_router, settings, sessionmaker, app.state.anomaly_detector
+    )
     # The BillExtractionAgent mirrors the other agents: built once, opens its own
     # session per call. The OCR worker (Task 5.8) reaches it via
     # app.state.bill_agent to structure an uploaded bill's OCR text into a BillData.
@@ -191,6 +199,7 @@ async def lifespan(app: FastAPI):
         ocr_mode=settings.ocr_mode,
         embedding_mode=settings.embedding_mode,
         ml_mode=settings.ml_mode,
+        finance_agent="ready",
     )
 
     yield
