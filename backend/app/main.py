@@ -14,6 +14,7 @@ from app.agents.llm.grok_router import GrokRouter
 from app.agents.llm.router import FallbackLLMRouter, GeminiRouter, LLMRouter
 from app.agents.ocr.agent import BillExtractionAgent
 from app.agents.order.agent import OrderAgent
+from app.agents.supervisor.agent import OwnerSupervisor
 from app.api import (
     activation,
     admin,
@@ -188,6 +189,19 @@ async def lifespan(app: FastAPI):
     # session per call. The OCR worker (Task 5.8) reaches it via
     # app.state.bill_agent to structure an uploaded bill's OCR text into a BillData.
     app.state.bill_agent = BillExtractionAgent(app.state.llm_router, settings, sessionmaker)
+    # The OwnerSupervisor wires all five specialist agents under one LangGraph
+    # (Task 7.6). Built AFTER all agents are ready; attached to the Postgres
+    # checkpointer so conversation state survives container restarts (AD-7.2).
+    app.state.supervisor = OwnerSupervisor(
+        router=app.state.llm_router,
+        order_agent=app.state.order_agent,
+        inventory_agent=app.state.inventory_agent,
+        finance_agent=app.state.finance_agent,
+        customer_agent=app.state.customer_agent,
+        advisor_agent=app.state.advisor_agent,
+        checkpointer=app.state.checkpointer,
+    )
+    log.info("modir.supervisor.ready")
     app.state.dispatcher = MessageDispatcher(app.state.order_agent, sessionmaker)
     # The supplier dispatcher is built once here (like EmailSender / the agents):
     # the approvals API (Task 4.12) fires its `dispatch` as a background task after

@@ -32,6 +32,7 @@ from app.db.models import Inventory
 from app.infra.logging import get_logger
 from app.infra.settings import Settings
 from app.ml.predictors import DemandPredictor, StubDemandPredictor
+from app.repositories.inventory import InventoryRepository
 from app.repositories.products import ProductRepository
 from app.repositories.training_data import TrainingDataRepository
 
@@ -153,3 +154,29 @@ class InventoryAgent:
             if po_id is not None:
                 await session.commit()
             return po_id
+
+    async def handle(self, question: str, tenant_id: UUID) -> str:
+        """Answer an owner's inventory question. Returns Lebanese Arabic summary.
+
+        Read-only: reports current low-stock status. The owner sees which products
+        need attention; the actual PO draft is triggered automatically by order
+        completion (draft_for_low_stock) and then awaits HIL approval in the
+        dashboard — this method does not draft, approve, or send anything.
+        """
+        async with self._sessionmaker() as session:
+            low_stock = await InventoryRepository(session).list_low_stock(tenant_id)
+            if not low_stock:
+                log.info("inventory_agent.handle.no_low_stock", tenant_id=str(tenant_id))
+                return "مخزونك تمام! ما في منتجات تحتاج إعادة طلب هلق. 👍"
+            product_repo = ProductRepository(session)
+            lines = [f"🔴 عندك {len(low_stock)} منتج قريب من النفاد:"]
+            for inv in low_stock:
+                product = await product_repo.get(tenant_id, inv.product_id)
+                name = product.name_ar if product is not None else "منتج"
+                lines.append(f"  - {name}: {inv.quantity} وحدة متبقية")
+            log.info(
+                "inventory_agent.handle.low_stock",
+                tenant_id=str(tenant_id),
+                count=len(low_stock),
+            )
+            return "\n".join(lines)
