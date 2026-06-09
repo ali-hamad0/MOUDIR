@@ -5,7 +5,6 @@ provider-quarantine pattern as the Gemini router. The CI guard (Task 7.14)
 enforces that boundary with an AST-based grep test.
 """
 
-from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseChatModel
 
 from app.infra.settings import Settings
@@ -24,6 +23,8 @@ class AnthropicRouter:
         self._settings = settings
 
     def _build(self, model: str) -> BaseChatModel:
+        from langchain_anthropic import ChatAnthropic  # lazy: only when key is present
+
         return ChatAnthropic(
             api_key=self._settings.anthropic_api_key.get_secret_value(),
             model=model,

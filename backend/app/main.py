@@ -9,8 +9,6 @@ from app.agents.advisor.agent import AdvisorAgent
 from app.agents.customer.agent import CustomerAgent
 from app.agents.finance.agent import FinanceAgent
 from app.agents.inventory.agent import InventoryAgent
-from app.agents.llm.anthropic_router import AnthropicRouter
-from app.agents.llm.grok_router import GrokRouter
 from app.agents.llm.router import FallbackLLMRouter, GeminiRouter, LLMRouter
 from app.agents.ocr.agent import BillExtractionAgent
 from app.agents.order.agent import OrderAgent
@@ -62,12 +60,16 @@ def _build_llm_router(settings: Settings, log) -> LLMRouter:
     providers: list[LLMRouter] = [GeminiRouter(settings)]
 
     if settings.grok_api_key.get_secret_value():
+        from app.agents.llm.grok_router import GrokRouter
+
         providers.append(GrokRouter(settings))
         log.info("modir.llm.grok.enabled", model_t1=settings.grok_tier1_model)
     else:
         log.info("modir.llm.grok.skipped", reason="no_api_key")
 
     if settings.anthropic_api_key.get_secret_value():
+        from app.agents.llm.anthropic_router import AnthropicRouter
+
         providers.append(AnthropicRouter(settings))
         log.info("modir.llm.anthropic.enabled", model_t1=settings.anthropic_tier1_model)
     else:

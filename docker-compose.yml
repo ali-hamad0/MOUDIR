@@ -78,14 +78,23 @@ services:
   # Dev-only: Vault runs in in-memory dev mode, so secrets are wiped on every
   # recreate. This one-shot service re-seeds them automatically once Vault is up,
   # then exits. Keeps `docker compose up` self-contained — no manual seed step.
+  #
+  # Real keys: create .vault_secrets.env (gitignored) with your actual values.
+  # Place the GCP service-account JSON at secrets/service_account.json (gitignored).
+  # Both files are optional — missing entries fall back to dev placeholders.
   vault-seed:
     image: hashicorp/vault:latest
     environment:
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: root
       SKIP_SETCAP: "true"   # we override the entrypoint; skip the image's mlock setcap step
+    env_file:
+      - path: .vault_secrets.env
+        required: false
     cap_add:
       - IPC_LOCK
+    volumes:
+      - ./secrets:/vault/secrets:ro
     networks:
       - modir_net
     depends_on:
@@ -96,11 +105,21 @@ services:
       - sh
       - -c
       - |
-        vault kv put secret/modir/llm gemini_api_key="placeholder-rotate-before-prod" langsmith_api_key="dev-langsmith-key-rotate-before-prod" &&
-        vault kv put secret/modir/minio access_key="modir-access" secret_key="modir-secret-changeme" &&
-        vault kv put secret/modir/auth jwt_secret="dev-jwt-secret-rotate-before-prod" &&
-        vault kv put secret/modir/mail api_key="dev-mail-key-rotate-before-prod" &&
-        vault kv put secret/modir/ocr service_account_json="{}"
+        OCR_JSON="$$(cat /vault/secrets/service_account.json 2>/dev/null || echo '{}')"
+        vault kv put secret/modir/llm \
+          gemini_api_key="${GEMINI_API_KEY:-placeholder-rotate-before-prod}" \
+          langsmith_api_key="${LANGSMITH_API_KEY:-dev-langsmith-key-rotate-before-prod}" \
+          grok_api_key="${GROK_API_KEY:-}" \
+          anthropic_api_key="${ANTHROPIC_API_KEY:-}" &&
+        vault kv put secret/modir/minio \
+          access_key="${MINIO_ACCESS_KEY:-modir-access}" \
+          secret_key="${MINIO_SECRET_KEY:-modir-secret-changeme}" &&
+        vault kv put secret/modir/auth \
+          jwt_secret="${JWT_SECRET:-dev-jwt-secret-rotate-before-prod}" &&
+        vault kv put secret/modir/mail \
+          api_key="${MAIL_API_KEY:-dev-mail-key-rotate-before-prod}" &&
+        vault kv put secret/modir/ocr \
+          service_account_json="$$OCR_JSON"
 
   migrate:
     build:

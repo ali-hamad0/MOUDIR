@@ -4,7 +4,8 @@ FROM python:3.11-slim AS builder
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
+    UV_LINK_MODE=copy \
+    UV_HTTP_TIMEOUT=120
 
 WORKDIR /app
 
@@ -29,11 +30,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# curl is required by the HEALTHCHECK below.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
 # Copy the prebuilt virtual environment from the builder. No toolchain, no uv.
 COPY --from=builder /app/.venv /app/.venv
 
@@ -51,7 +47,7 @@ RUN mkdir -p /var/log/modir
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
 # .venv is on PATH, so uvicorn runs directly — no `uv run` needed at runtime.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
