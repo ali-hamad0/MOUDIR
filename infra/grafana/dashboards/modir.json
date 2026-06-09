@@ -1,0 +1,165 @@
+{
+  "__inputs": [],
+  "__requires": [
+    { "type": "datasource", "id": "loki", "name": "Loki", "version": "1.0.0" }
+  ],
+  "annotations": { "list": [] },
+  "description": "Modir structured-log observability: request rate, errors, LLM fallbacks, rate-limit hits, cost, and agent latency.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (tenant_id) (rate({app=\"modir\"}[5m]))",
+          "legendFormat": "tenant={{tenant_id}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Request rate by tenant (last 1h)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(rate({app=\"modir\"} | json | level=\"error\" [5m]))",
+          "legendFormat": "errors",
+          "queryType": "range",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(rate({app=\"modir\"} | json | level=\"warning\" [5m]))",
+          "legendFormat": "warnings",
+          "queryType": "range",
+          "refId": "B"
+        }
+      ],
+      "title": "Error / Warning rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum(count_over_time({app=\"modir\"} |= \"supervisor.handle.error\" [1h]))",
+          "legendFormat": "LLM fallbacks",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "LLM fallback activations per hour",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (tenant_id) (count_over_time({app=\"modir\"} |= \"rate_limit.exceeded\" [5m]))",
+          "legendFormat": "tenant={{tenant_id}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Rate limit hits per tenant",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 5,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by (tenant_id) (sum_over_time({app=\"modir\"} | json | __error__=\"\" | unwrap cost_usd [1d]))",
+          "legendFormat": "tenant={{tenant_id}}",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Cost per tenant per day (USD, from agent_runs log lines)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 6,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "quantile_over_time(0.50, {app=\"modir\"} | json | __error__=\"\" | unwrap duration_ms [5m]) by (agent)",
+          "legendFormat": "p50 {{agent}}",
+          "queryType": "range",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "quantile_over_time(0.95, {app=\"modir\"} | json | __error__=\"\" | unwrap duration_ms [5m]) by (agent)",
+          "legendFormat": "p95 {{agent}}",
+          "queryType": "range",
+          "refId": "B"
+        }
+      ],
+      "title": "Agent latency p50 / p95 (ms)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["modir", "observability"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "Asia/Beirut",
+  "title": "Modir Observability",
+  "uid": "modir-obs-8",
+  "version": 1
+}
