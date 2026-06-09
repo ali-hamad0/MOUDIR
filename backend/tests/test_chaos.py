@@ -155,6 +155,40 @@ def _db_kill_app() -> FastAPI:
     return _app
 
 
+def _meta_payload(to: str, from_: str, text: str) -> dict:
+    """Build a minimal valid Meta Cloud API webhook payload for chaos / load tests."""
+    return {
+        "object": "whatsapp_business_account",
+        "entry": [
+            {
+                "id": "WABA_ID",
+                "changes": [
+                    {
+                        "field": "messages",
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "metadata": {
+                                "display_phone_number": to.lstrip("+"),
+                                "phone_number_id": "TEST_PID",
+                            },
+                            "contacts": [{"profile": {"name": "Test"}, "wa_id": from_.lstrip("+")}],
+                            "messages": [
+                                {
+                                    "id": "wamid.TEST",
+                                    "from": from_.lstrip("+"),
+                                    "timestamp": "1700000000",
+                                    "type": "text",
+                                    "text": {"body": text},
+                                }
+                            ],
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+
 async def test_db_kill_webhook_returns_503():
     """A lost DB connection on the webhook path returns HTTP 503, not 500.
 
@@ -169,7 +203,7 @@ async def test_db_kill_webhook_returns_503():
     ) as client:
         response = await client.post(
             "/webhooks/whatsapp",
-            json={"to": "+96100000000", "from": "+96111111111", "text": "مرحبا"},
+            json=_meta_payload("+96100000000", "+96111111111", "مرحبا"),
         )
 
     assert response.status_code == 503, f"Expected 503 on DB outage, got {response.status_code}"
@@ -184,7 +218,7 @@ async def test_db_kill_response_is_arabic():
     ) as client:
         response = await client.post(
             "/webhooks/whatsapp",
-            json={"to": "+96100000000", "from": "+96111111111", "text": "مرحبا"},
+            json=_meta_payload("+96100000000", "+96111111111", "مرحبا"),
         )
 
     body = response.json()

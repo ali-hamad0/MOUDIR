@@ -72,13 +72,66 @@ class _MockDispatcher:
         return f"tenant:{identity.tenant.id}"
 
 
+class _FakeWhatsAppClient:
+    """Captures send_text calls so isolation tests can inspect the replies."""
+
+    def __init__(self) -> None:
+        self.replies: dict[str, str] = {}  # to_phone → reply body
+        self._lock = asyncio.Lock()
+
+    async def send_text(self, to: str, body: str) -> None:
+        async with self._lock:
+            self.replies[to] = body
+
+    async def download_media(self, media_id: str) -> tuple[bytes, str]:
+        return b"OggS", "audio/ogg; codecs=opus"
+
+
+# ── Meta payload helper ───────────────────────────────────────────────────────
+
+
+def _meta_payload(to: str, from_: str, text: str) -> dict:
+    """Wrap to/from/text into the real Meta Cloud API webhook envelope."""
+    return {
+        "object": "whatsapp_business_account",
+        "entry": [
+            {
+                "id": "WABA_LOAD",
+                "changes": [
+                    {
+                        "field": "messages",
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "metadata": {
+                                "display_phone_number": to.lstrip("+"),
+                                "phone_number_id": "TEST_PID",
+                            },
+                            "contacts": [{"profile": {"name": "Load"}, "wa_id": from_.lstrip("+")}],
+                            "messages": [
+                                {
+                                    "id": "wamid.LOAD",
+                                    "from": from_.lstrip("+"),
+                                    "timestamp": "1700000000",
+                                    "type": "text",
+                                    "text": {"body": text},
+                                }
+                            ],
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+
 # ── Minimal test app ──────────────────────────────────────────────────────────
 
 
-def _build_load_app(engine) -> FastAPI:
+def _build_load_app(engine) -> tuple[FastAPI, _FakeWhatsAppClient]:
     """Minimal FastAPI with real identity resolution, fake Redis, mock dispatcher.
 
     No lifespan — state is set directly so no Vault / real LLM needed.
+    Returns (app, fake_wa_client) so tests can inspect captured replies.
     """
     app = FastAPI()
     app.include_router(webhooks.router)
@@ -87,7 +140,9 @@ def _build_load_app(engine) -> FastAPI:
     app.state.redis = fake_redis
     app.state.rate_limiter = RateLimiter(fake_redis, default_rpm=0)  # 0 = unlimited
     app.state.dispatcher = _MockDispatcher()
-    return app
+    fake_wa_client = _FakeWhatsAppClient()
+    app.state.whatsapp_client = fake_wa_client
+    return app, fake_wa_client
 
 
 # ── Module-scoped fixture: seed once, clean up after all load tests ───────────
@@ -184,10 +239,10 @@ async def _fire_all(app: FastAPI, payloads: list[dict]) -> list[httpx.Response]:
 async def test_100_concurrent_requests_all_succeed(load_tenants):
     """All 100 webhook requests return HTTP 200."""
     engine, specs = load_tenants
-    app = _build_load_app(engine)
+    app, _ = _build_load_app(engine)
 
     payloads = [
-        {"to": spec.wa_number, "from": phone, "text": "بدي طلب"}
+        _meta_payload(spec.wa_number, phone, "بدي طلب")
         for spec in specs
         for phone in spec.customer_phones
     ]
@@ -200,32 +255,36 @@ async def test_100_concurrent_requests_all_succeed(load_tenants):
 
 @pytest.mark.load
 async def test_100_concurrent_requests_tenant_isolation(load_tenants):
-    """Every response carries the tenant_id of its sender — no cross-tenant leak.
+    """Every reply is sent to the correct tenant's customer — no cross-tenant leak.
 
+    The mock dispatcher echoes the resolved tenant_id in the reply body.
+    The fake WhatsApp client captures reply bodies keyed by recipient phone.
     This is The Wall under concurrent load: identity resolution must never
     return a tenant_id other than the one the sender belongs to.
     """
     engine, specs = load_tenants
-    app = _build_load_app(engine)
+    app, fake_wa_client = _build_load_app(engine)
 
-    cases: list[tuple[dict, str]] = [
-        ({"to": spec.wa_number, "from": phone, "text": "كيف الأوضاع"}, str(spec.tenant_id))
+    cases: list[tuple[dict, str, str]] = [
+        (_meta_payload(spec.wa_number, phone, "كيف الأوضاع"), str(spec.tenant_id), phone)
         for spec in specs
         for phone in spec.customer_phones
     ]
 
-    payloads = [payload for payload, _ in cases]
+    payloads = [payload for payload, _, _ in cases]
     responses = await _fire_all(app, payloads)
 
     violations: list[str] = []
-    for i, (resp, (_, expected_id)) in enumerate(zip(responses, cases, strict=True)):
+    for i, (resp, (_, expected_id, phone)) in enumerate(zip(responses, cases, strict=True)):
         if resp.status_code != 200:
             violations.append(f"Request {i}: HTTP {resp.status_code}")
             continue
-        reply: str = resp.json()["reply"]
+        # Reply is sent via WhatsAppClient.send_text(to=customer_phone, body=reply)
+        # The mock dispatcher embeds the tenant_id in the body — check isolation.
+        reply = fake_wa_client.replies.get(phone, "")
         if expected_id not in reply:
             violations.append(
-                f"Request {i}: expected tenant {expected_id!r} in reply, got {reply!r}"
+                f"Request {i}: expected tenant {expected_id!r} in reply to {phone}, got {reply!r}"
             )
 
     assert not violations, f"Isolation violated in {len(violations)} of 100 cases:\n" + "\n".join(
@@ -237,10 +296,10 @@ async def test_100_concurrent_requests_tenant_isolation(load_tenants):
 async def test_100_concurrent_requests_throughput(load_tenants):
     """All 100 requests complete within TIMEOUT_SECONDS."""
     engine, specs = load_tenants
-    app = _build_load_app(engine)
+    app, _ = _build_load_app(engine)
 
     payloads = [
-        {"to": spec.wa_number, "from": phone, "text": "شو الطلبات"}
+        _meta_payload(spec.wa_number, phone, "شو الطلبات")
         for spec in specs
         for phone in spec.customer_phones
     ]
