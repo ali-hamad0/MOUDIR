@@ -25,7 +25,8 @@ node_modules/
 dist/
 build/
 .DS_Store
-docs
+docs/PHASE_*
+docs/DECISIONS.md
 # Dev-only compose overrides (bind-mounts, exposed ports)
 docker-compose.override.yml
 # Claude Code harness artifacts
