@@ -289,6 +289,22 @@ def create_app() -> FastAPI:
         allow_headers=["Authorization", "Content-Type"],
     )
 
+    # Phase 8 (Task 8.4) — DB chaos handler: a lost Postgres connection must
+    # surface as 503 Service Unavailable, not 500. The on-call runbook tells
+    # engineers to grep for "db.connection.error" in structured logs.
+    import asyncpg
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+
+    @app.exception_handler(asyncpg.PostgresConnectionError)
+    async def _db_connection_error(request: Request, exc: asyncpg.PostgresConnectionError):
+        log = get_logger("db.connection.error")
+        log.error("db.connection.error", path=str(request.url.path), error=str(exc))
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "الخدمة غير متاحة مؤقتاً. حاول بعد قليل."},
+        )
+
     @app.get("/health")
     async def health():
         """Liveness probe. Used by Docker healthcheck and load balancers."""
