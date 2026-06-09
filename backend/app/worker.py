@@ -24,15 +24,19 @@ shutdown between passes.
 
 import asyncio
 import signal
+import time
 from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
+import httpx
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.agents.llm.router import GeminiRouter
 from app.agents.ocr.agent import BillExtractionAgent, ExtractionResult
-from app.db.models import SupplierBillLine
+from app.db.models import BusinessPolicy, SupplierBillLine
 from app.db.session import create_engine
 from app.infra.embeddings import EmbeddingClient, build_embedding_client
 from app.infra.kb_content import build_kb_text, chunk_text
@@ -42,6 +46,8 @@ from app.infra.ocr.engine import OCREngine
 from app.infra.settings import Settings, get_settings
 from app.infra.storage import StorageClient
 from app.infra.vault import resolve_secrets
+from app.repositories.agent_runs import AgentRunRepository
+from app.repositories.business_policies import BusinessPolicyRepository
 from app.repositories.knowledge_base_docs import (
     KnowledgeBaseDocRepository,
     tenants_with_embeddable_docs,
@@ -52,6 +58,8 @@ from app.repositories.supplier_bills import (
 )
 from app.repositories.vector_chunks import VectorChunkRepository
 from app.services.supplier_bills import SupplierBillService
+
+_COST_ALERT_INTERVAL = 3600.0  # seconds between full cost-alert sweeps
 
 log = get_logger(__name__)
 
@@ -288,6 +296,115 @@ class KnowledgeEmbedder:
             )
 
 
+class CostAlertTask:
+    """Hourly task: check each tenant's LLM spend against their daily budget.
+
+    When today_usd ≥ budget_usd and an alert_webhook_url is configured, POSTs a
+    JSON payload to that URL. Deduplicates via a `cost_alert_last_sent` policy row —
+    if the last alert was sent within the past hour, the alert is suppressed.
+    Failures (unreachable webhook, bad URL) are logged and swallowed — the alert
+    system must never crash the worker or degrade order processing.
+    """
+
+    def __init__(self, sessionmaker: async_sessionmaker) -> None:
+        self._sessionmaker = sessionmaker
+
+    async def run_once(self) -> int:
+        """Sweep all tenants that have a non-zero budget. Returns alerts sent."""
+        async with self._sessionmaker() as session:
+            tenant_ids = await self._tenants_with_budget(session)
+
+        alerts = 0
+        for tenant_id in tenant_ids:
+            if await self._check_and_alert(tenant_id):
+                alerts += 1
+        return alerts
+
+    async def _tenants_with_budget(self, session: AsyncSession) -> list[UUID]:
+        stmt = select(BusinessPolicy.tenant_id).where(
+            BusinessPolicy.key == "daily_llm_budget_usd",
+            BusinessPolicy.value.isnot(None),
+            BusinessPolicy.value != "0",
+            BusinessPolicy.value != "",
+        )
+        rows = (await session.execute(stmt)).all()
+        return [row[0] for row in rows]
+
+    async def _check_and_alert(self, tenant_id: UUID) -> bool:
+        async with self._sessionmaker() as session:
+            policy_repo = BusinessPolicyRepository(session)
+
+            budget_policy = await policy_repo.get_by_key(tenant_id, "daily_llm_budget_usd")
+            if not budget_policy or not budget_policy.value:
+                return False
+            try:
+                budget_usd = float(budget_policy.value)
+            except ValueError:
+                return False
+            if budget_usd <= 0:
+                return False
+
+            today = date.today()
+            summary = await AgentRunRepository(session).daily_summary(
+                tenant_id, from_date=today, to_date=today
+            )
+            today_usd = sum(sum(agents.values()) for agents in summary.values())
+
+            if today_usd < budget_usd:
+                return False
+
+            # Deduplicate: suppress if last alert < 1 hour ago
+            last_policy = await policy_repo.get_by_key(tenant_id, "cost_alert_last_sent")
+            if last_policy and last_policy.value:
+                try:
+                    last_sent = datetime.fromisoformat(last_policy.value)
+                    if (datetime.now(UTC) - last_sent).total_seconds() < 3600:
+                        return False
+                except ValueError:
+                    pass
+
+            webhook_policy = await policy_repo.get_by_key(tenant_id, "alert_webhook_url")
+            if not webhook_policy or not webhook_policy.value:
+                return False
+
+            await self._post_alert(webhook_policy.value, tenant_id, today_usd, budget_usd)
+
+            # Record the alert time
+            now_iso = datetime.now(UTC).isoformat()
+            if last_policy:
+                last_policy.value = now_iso
+            else:
+                session.add(
+                    BusinessPolicy(
+                        tenant_id=tenant_id,
+                        key="cost_alert_last_sent",
+                        value=now_iso,
+                    )
+                )
+            await session.commit()
+            return True
+
+    @staticmethod
+    async def _post_alert(url: str, tenant_id: UUID, today_usd: float, budget_usd: float) -> None:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                await client.post(
+                    url,
+                    json={
+                        "tenant_id": str(tenant_id),
+                        "today_usd": round(today_usd, 6),
+                        "budget_usd": budget_usd,
+                        "message": (
+                            f"تجاوز الإنفاق اليومي على الذكاء الاصطناعي الميزانية المحددة "
+                            f"({today_usd:.4f} USD من {budget_usd:.2f} USD)."
+                        ),
+                    },
+                )
+            log.info("cost_alert.sent", tenant_id=str(tenant_id), today_usd=today_usd)
+        except Exception as exc:
+            log.warning("cost_alert.webhook_failed", tenant_id=str(tenant_id), error=str(exc))
+
+
 def build_pipeline(settings: Settings) -> tuple[BillProcessor, KnowledgeEmbedder]:
     """Construct the worker's singletons the SAME way `lifespan` builds the api's.
 
@@ -311,7 +428,7 @@ def build_pipeline(settings: Settings) -> tuple[BillProcessor, KnowledgeEmbedder
         embedding_client=build_embedding_client(settings),
         settings=settings,
     )
-    return processor, embedder
+    return processor, embedder, CostAlertTask(sessionmaker)
 
 
 async def run_worker() -> None:
@@ -330,7 +447,7 @@ async def run_worker() -> None:
         poll=settings.worker_poll_seconds,
     )
 
-    processor, embedder = build_pipeline(settings)
+    processor, embedder, cost_alert = build_pipeline(settings)
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -342,6 +459,8 @@ async def run_worker() -> None:
             # process is killed directly there; the graceful path is for Linux (prod).
             pass
 
+    last_cost_check = time.monotonic() - _COST_ALERT_INTERVAL  # run on first pass
+
     while not stop.is_set():
         try:
             bills = await processor.run_once()
@@ -350,6 +469,16 @@ async def run_worker() -> None:
                 log.info("worker.pass.done", bills=bills, docs=docs)
         except Exception as exc:  # noqa: BLE001 — never let one pass kill the loop
             log.error("worker.pass.error", error=f"{type(exc).__name__}: {exc}")
+
+        if time.monotonic() - last_cost_check >= _COST_ALERT_INTERVAL:
+            try:
+                alerts = await cost_alert.run_once()
+                if alerts:
+                    log.info("cost_alert.sweep.done", alerts_sent=alerts)
+            except Exception as exc:  # noqa: BLE001
+                log.error("cost_alert.sweep.error", error=f"{type(exc).__name__}: {exc}")
+            last_cost_check = time.monotonic()
+
         try:
             await asyncio.wait_for(stop.wait(), timeout=settings.worker_poll_seconds)
         except TimeoutError:

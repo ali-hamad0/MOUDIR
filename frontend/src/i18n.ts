@@ -275,6 +275,15 @@ export const t = {
   manualOrderProductNotFound: "منتج غير موجود بكتالوج محلك.",
   manualOrderError: "ما قدرنا نسجّل الطلب. جرّب مرة تانية.",
   manualOrderNoProducts: "لازم تضيف منتج واحد على الأقل.",
+  // ---- Cost dashboard (Phase 8, Task 8.7) ----
+  navCosts: "التكاليف",
+  costsTitle: "تكاليف الذكاء الاصطناعي",
+  costsSubtitle: "آخر 30 يوم — إنفاق LLM بالدولار",
+  costsTodayLabel: "اليوم",
+  costsBudgetLabel: "الميزانية اليومية",
+  costsNoBudget: "ما في ميزانية محددة",
+  costsNoData: "ما في بيانات إنفاق هلّق.",
+  costsUSD: "USD",
   // Generic actions
   next: "التالي",
   back: "رجوع",

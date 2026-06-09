@@ -127,6 +127,17 @@ export function ChatIcon(props: IconProps) {
   );
 }
 
+export function CostIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 6v2" />
+      <path d="M12 16v2" />
+      <path d="M9 9h1a2 2 0 0 1 0 4h-1a2 2 0 0 0 0 4h3" />
+    </svg>
+  );
+}
+
 export function LogoutIcon(props: IconProps) {
   return (
     <svg {...base} {...props}>
