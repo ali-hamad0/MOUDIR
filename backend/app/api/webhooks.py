@@ -89,8 +89,18 @@ async def whatsapp_webhook(
         log.info("whatsapp.webhook.rate_limited", **log_ctx)
         return Response(status_code=200)
 
-    # 4. Text extraction (audio transcription added in Task 10.5)
+    # 4. Text extraction — download + transcribe audio if needed (Task 10.5)
     text = message.text
+    if text is None and message.audio_id is not None:
+        whatsapp_client = request.app.state.whatsapp_client
+        audio_transcriber = request.app.state.audio_transcriber
+        audio_bytes, mime_type = await whatsapp_client.download_media(message.audio_id)
+        text = await audio_transcriber.transcribe(audio_bytes, mime_type)
+        log.info(
+            "whatsapp.webhook.audio_transcribed",
+            transcript_length=len(text),
+            **log_ctx,
+        )
 
     # 5. Dispatch through guardrails → agent → Lebanese Arabic reply
     dispatcher = request.app.state.dispatcher

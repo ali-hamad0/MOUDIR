@@ -33,6 +33,7 @@ from app.api import (
     webhooks,
 )
 from app.db.session import create_engine
+from app.infra.audio_transcriber import build_audio_transcriber
 from app.infra.bill_committer import BillCommitter
 from app.infra.checkpointer import build_checkpointer
 from app.infra.embeddings import build_embedding_client
@@ -252,6 +253,10 @@ async def lifespan(app: FastAPI):
     # calls send_text() after every successful dispatch. In dev mode it logs
     # only and never calls the real Meta API.
     app.state.whatsapp_client = build_whatsapp_client(settings)
+    # Audio transcriber (Phase 10, Task 10.5). Built once here; the webhook
+    # handler calls transcribe() when an audio message arrives before dispatch.
+    # In dev mode returns the Arabic stub without calling Gemini.
+    app.state.audio_transcriber = build_audio_transcriber(settings)
     log.info(
         "modir.agents.ready",
         langsmith=settings.langsmith_tracing,
