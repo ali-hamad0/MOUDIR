@@ -94,6 +94,14 @@ jobs:
         # Set ROUTING_EVAL_REAL_LLM=1 locally to test with the real Gemini LLM.
         run: uv run python -m app.agents.eval.evaluate_routing
 
+      - name: Agent golden evals + red-team gate (offline mock)
+        working-directory: ./backend
+        # Phase 8 (Task 8.2): run 110 Lebanese Arabic queries (22 per agent × 5) through
+        # the offline mock, and 28 injection/jailbreak probes through check_input().
+        # Exits 1 if any agent's routing accuracy < 0.85 or red-team block rate < 0.92.
+        # Set AGENT_EVAL_REAL_LLM=1 locally to test with the real Gemini LLM.
+        run: uv run python -m app.agents.eval.evaluate_agents
+
       - name: Forbidden patterns check
         run: |
           # Scan only .py source (never compiled __pycache__ bytecode) and match
