@@ -22,6 +22,7 @@ from app.api import (
     chat,
     costs,
     customers,
+    health,
     inventory,
     me,
     orders,
@@ -307,7 +308,7 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/health")
-    async def health():
+    async def liveness():
         """Liveness probe. Used by Docker healthcheck and load balancers."""
         return {"status": "ok"}
 
