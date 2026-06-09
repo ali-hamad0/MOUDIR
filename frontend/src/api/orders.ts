@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { OrderRead, OrdersPage } from "./types";
+import type { ManualOrderRequest, OrderRead, OrdersPage } from "./types";
 
 export const ordersApi = {
   today: (limit = 50, offset = 0) =>
@@ -8,4 +8,7 @@ export const ordersApi = {
   // (server-side) low-stock reorder drafting. 409 if it isn't completable.
   complete: (orderId: string) =>
     api.post<OrderRead>(`/orders/${orderId}/complete`),
+  // Phase 8 (Task 8.5): Dashboard owner creates an order manually (AI down).
+  createManual: (body: ManualOrderRequest) =>
+    api.post<OrderRead>("/orders/manual", body),
 };

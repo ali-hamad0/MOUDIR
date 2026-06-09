@@ -289,3 +289,15 @@ export interface AnomalyPredictions {
   mode: string;
   items: AnomalyDay[];
 }
+
+// ---- Manual order (Phase 8, Task 8.5) ----
+
+export interface ManualOrderItem {
+  product_id: string;
+  quantity: number;
+}
+
+export interface ManualOrderRequest {
+  customer_phone: string;
+  items: ManualOrderItem[];
+}

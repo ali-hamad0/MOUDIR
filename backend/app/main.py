@@ -310,6 +310,7 @@ def create_app() -> FastAPI:
         """Liveness probe. Used by Docker healthcheck and load balancers."""
         return {"status": "ok"}
 
+    app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(admin.router)
     app.include_router(signup_requests.router)

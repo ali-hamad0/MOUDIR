@@ -186,6 +186,7 @@ class OwnerSupervisor:
                 session_id=session_id,
                 routed_to=final.get("routed_to"),
             )
+            self._router.mark_healthy()
             return final.get("response", supervisor_ar.FALLBACK_REPLY)
         except Exception as exc:
             log.error(
@@ -195,4 +196,5 @@ class OwnerSupervisor:
                 error_type=type(exc).__name__,
                 error=str(exc),
             )
+            self._router.mark_unhealthy()
             return supervisor_ar.FALLBACK_REPLY

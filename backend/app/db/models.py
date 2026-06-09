@@ -273,6 +273,9 @@ class Order(Base):
     total_usd: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     raw_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Phase 8 (Task 8.5): "agent" for AI-created orders, "manual" for dashboard
+    # entries.  NULL is treated as "agent" for rows written before this column.
+    source: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
 
 class OrderItem(Base):
