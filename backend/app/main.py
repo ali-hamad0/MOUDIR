@@ -43,6 +43,7 @@ from app.infra.settings import Settings, get_settings
 from app.infra.storage import StorageClient
 from app.infra.supplier_dispatch import SupplierDispatcher
 from app.infra.vault import resolve_secrets
+from app.infra.whatsapp import build_whatsapp_client
 from app.ml.predictors import (
     build_anomaly_detector,
     build_churn_predictor,
@@ -247,6 +248,10 @@ async def lifespan(app: FastAPI):
     # structures that text (constitution IV). The provider SDK stays confined to
     # app/infra/ocr/cloud_vision.py.
     app.state.ocr_engine = build_ocr_engine(settings)
+    # WhatsApp reply client (Phase 10). Built once here; the webhook handler
+    # calls send_text() after every successful dispatch. In dev mode it logs
+    # only and never calls the real Meta API.
+    app.state.whatsapp_client = build_whatsapp_client(settings)
     log.info(
         "modir.agents.ready",
         langsmith=settings.langsmith_tracing,
