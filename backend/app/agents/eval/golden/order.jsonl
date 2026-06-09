@@ -1,0 +1,22 @@
+{"query_ar": "كم طلب وصلني اليوم؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "today order count"}
+{"query_ar": "شو حالة الطلبات الجديدة؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "new order status"}
+{"query_ar": "كم طلب معلق عندي هلق؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "pending orders now"}
+{"query_ar": "شو أكثر شي اتطلب اليوم؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "most ordered item today"}
+{"query_ar": "كم طلب وصل هالأسبوع؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "weekly order volume"}
+{"query_ar": "شو أكثر المنتجات طلباً؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "most requested products"}
+{"query_ar": "في طلبات جديدة؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "any new orders check"}
+{"query_ar": "عطيني قائمة الطلبات", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "list all orders"}
+{"query_ar": "شو الطلبات اللي جت هالصباح؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "morning orders"}
+{"query_ar": "كم طلب كان هالشهر؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "monthly order count"}
+{"query_ar": "شو الطلبات المكتملة اليوم؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "completed orders today"}
+{"query_ar": "في طلبات ما اتوصلت؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "undelivered orders"}
+{"query_ar": "شو متوسط الطلبات اليومية؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "average daily orders"}
+{"query_ar": "عطيني ملخص الطلبات", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "orders summary"}
+{"query_ar": "كيف حال الطلبات هالأسبوع؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "weekly orders status"}
+{"query_ar": "مين طلب أكثر شي؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "top ordering customer"}
+{"query_ar": "شو قيمة الطلبات اليوم؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "today orders value"}
+{"query_ar": "كم طلب في الطريق؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "orders in transit"}
+{"query_ar": "عندي طلبات ملغية؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "cancelled orders check"}
+{"query_ar": "شو أسرع طلب اتكمل اليوم؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "fastest completed order"}
+{"query_ar": "شو الطلبات اللي بتنتظر التوصيل؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "orders waiting delivery"}
+{"query_ar": "كم طلب جاهز للتسليم؟", "expected_intent": "order", "expected_tools": ["get_orders"], "notes": "orders ready for pickup"}

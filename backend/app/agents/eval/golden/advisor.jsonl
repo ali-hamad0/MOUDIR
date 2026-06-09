@@ -1,0 +1,22 @@
+{"query_ar": "كيف يومي رح يكون؟", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "compose_briefing"], "notes": "morning briefing"}
+{"query_ar": "إيش تنصحني؟", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "compose_briefing"], "notes": "general advice"}
+{"query_ar": "عطيني ملخص صباحي", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "compose_briefing"], "notes": "morning summary"}
+{"query_ar": "شو الوضع العام بالمحل؟", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "compose_briefing"], "notes": "general shop situation"}
+{"query_ar": "فيك تساعدني؟", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "compose_briefing"], "notes": "ambiguous help request — default advisor"}
+{"query_ar": "مرحبا، كيف الأمور؟", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "compose_briefing"], "notes": "ambiguous greeting — default advisor"}
+{"query_ar": "شو اللي لازم أنتبهله اليوم؟", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "get_anomaly_status", "compose_briefing"], "notes": "daily attention items"}
+{"query_ar": "عطيني نظرة عامة على المحل", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "compose_briefing"], "notes": "shop overview"}
+{"query_ar": "شو أهم شي اليوم؟", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "compose_briefing"], "notes": "most important today"}
+{"query_ar": "كيف الأوضاع؟", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "compose_briefing"], "notes": "general status check"}
+{"query_ar": "شو توقعاتك للأسبوع؟", "expected_intent": "advisor", "expected_tools": ["get_demand_forecast", "get_churn_summary", "compose_briefing"], "notes": "weekly forecast"}
+{"query_ar": "عطيني تقرير شامل", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "get_demand_forecast", "get_churn_summary", "get_anomaly_status", "compose_briefing"], "notes": "comprehensive report"}
+{"query_ar": "بدي أعرف كيف ماشي الحال", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "compose_briefing"], "notes": "how things are going"}
+{"query_ar": "شو الأخبار الجيدة والسيئة؟", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "get_anomaly_status", "compose_briefing"], "notes": "good and bad news"}
+{"query_ar": "كيف أحسن من محلي؟", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "get_demand_forecast", "compose_briefing"], "notes": "shop improvement advice"}
+{"query_ar": "شو القرارات اللي لازم آخذها اليوم؟", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "get_anomaly_status", "compose_briefing"], "notes": "today's decisions"}
+{"query_ar": "عطيني تقييم عام للأداء", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "get_churn_summary", "compose_briefing"], "notes": "performance evaluation"}
+{"query_ar": "شو اللي تغير هالأسبوع؟", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "compose_briefing"], "notes": "weekly changes"}
+{"query_ar": "كيف أستعد لنهاية الأسبوع؟", "expected_intent": "advisor", "expected_tools": ["get_demand_forecast", "get_churn_summary", "compose_briefing"], "notes": "weekend preparation"}
+{"query_ar": "شو أفضل وقت للتحضير؟", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "compose_briefing"], "notes": "best preparation time"}
+{"query_ar": "أخبرني عن وضع المحل كاملاً", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "get_demand_forecast", "get_churn_summary", "get_anomaly_status", "compose_briefing"], "notes": "full shop status"}
+{"query_ar": "شو رأيك بأداء المحل؟", "expected_intent": "advisor", "expected_tools": ["get_todays_snapshot", "compose_briefing"], "notes": "shop performance opinion"}
