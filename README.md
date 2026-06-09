@@ -1,10 +1,27 @@
 # Modir — AI Business Operations Assistant for Lebanese SMEs
 
+[![CI](https://github.com/ali-hamad0/MOUDIR/actions/workflows/ci.yml/badge.svg)](https://github.com/ali-hamad0/MOUDIR/actions/workflows/ci.yml)
+
 Modir lets Lebanese small business owners manage orders, inventory, finance,
 and customers through WhatsApp and a web dashboard, in Lebanese Arabic.
 Five LangGraph AI agents handle different domains; customers place orders by
 typing naturally in WhatsApp. When AI is unavailable, the owner can enter
 orders manually — the business never stops.
+
+## Demo
+
+Seed a Lebanese bakery with realistic data, then follow the demo script:
+
+```bash
+docker compose up -d
+docker compose exec api python -m scripts.seed_demo
+cd frontend && npm install && npm run dev   # http://localhost:5173
+```
+
+Login: `demo@modir.test` / `DemoPassword1`
+
+Full 5-minute walkthrough (customer order → ML forecast → AI down → manual entry → Grafana):
+[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
 
 ## Architecture
 
@@ -121,3 +138,20 @@ across 10 tenants and asserts zero cross-tenant data leakage.
 
 - [RUNBOOK.md](RUNBOOK.md) — failure scenarios and recovery commands
 - [DECISIONS.md](DECISIONS.md) — every architectural decision, Phase 0 → Phase 8
+
+## For Reviewers
+
+- [docs/FOR_REVIEWERS.md](docs/FOR_REVIEWERS.md) — every defend-it question answered with code references
+- [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) — step-by-step demo guide with exact cURL commands
+- Seed demo data: `docker compose exec api python -m scripts.seed_demo`
+
+**Key architectural claims to verify:**
+
+| Claim | Where to look |
+|-------|---------------|
+| Tenant isolation in every query | `backend/app/repositories/base.py` — `_require_tenant_scope` |
+| Secrets only in Vault, never in code | `backend/app/infra/vault.py` — `resolve_secrets` |
+| HIL gate on every Level-2 action | `backend/app/infra/action_gate.py` — `ActionGate.authorize` |
+| ML predicts, LLM explains | `backend/app/ml/` (models) vs `backend/app/agents/` (language) |
+| No `os.getenv`, `print(`, `import requests` in app code | `grep -rn "os.getenv\|print(\|import requests" backend/app/` |
+| Red-team block rate >= 92% | `backend/app/agents/eval/agent_thresholds.yaml` + CI step |
