@@ -169,6 +169,11 @@ class Settings(BaseSettings):
     # introduced, add it to vault.py secrets_map AND both seed paths.
     po_dispatch_webhook_secret: SecretStr = Field(default=SecretStr(""))
 
+    # Rate limiting (Phase 8, Task 8.1). Default requests-per-minute applied to
+    # customer-facing endpoints when the tenant has no `rate_limit_rpm` policy row.
+    # A per-tenant policy value of "0" means no limit (explicit bypass).
+    rate_limit_default_rpm: int = Field(default=30)
+
     # Paths
     base_dir: Path = Field(default=Path(__file__).parent.parent.parent)
 

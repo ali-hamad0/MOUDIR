@@ -43,6 +43,7 @@ dependencies = [
     "scikit-learn>=1.5.0",   # Phase 6 — Pipeline, TimeSeriesSplit, CV, the baselines
     "xgboost>=2.1.0",        # Phase 6 — gradient-boosted candidate per task
     "joblib>=1.4.0",         # Phase 6 — persist/load trained pipelines (artifacts)
+    "redis>=5.0.0",          # Phase 8 — per-tenant rate limiting (token bucket in Redis)
 ]
 
 [dependency-groups]
@@ -54,6 +55,7 @@ dev = [
     "mypy>=1.13.0",
     "httpx>=0.28.0",
     "pre-commit>=4.0.0",
+    "fakeredis>=2.20.0",           # Phase 8 — in-memory Redis for rate limiter tests
 ]
 
 [tool.ruff]
