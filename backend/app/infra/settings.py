@@ -169,6 +169,24 @@ class Settings(BaseSettings):
     # introduced, add it to vault.py secrets_map AND both seed paths.
     po_dispatch_webhook_secret: SecretStr = Field(default=SecretStr(""))
 
+    # WhatsApp Business API — Phase 10. Non-secret config here; the two secrets
+    # (api_token, verify_token) are RESOLVED FROM VAULT under modir/whatsapp.
+    # whatsapp_mode mirrors mail_mode / ocr_mode:
+    #   "dev"  — log outbound messages, never call the real Meta API (CI default)
+    #   "live" — POST to graph.facebook.com (requires a valid Meta app + approval)
+    whatsapp_mode: str = Field(default="dev")  # "dev" | "live"
+    # Meta's internal ID for the business phone number (NOT the human-readable
+    # number; that lives in tenants.whatsapp_number). This is an identifier, not
+    # a secret — set via WHATSAPP_PHONE_NUMBER_ID in .env. Dev can leave it empty
+    # (the client logs in dev mode and never uses this value for API calls).
+    whatsapp_phone_number_id: str = Field(default="")
+    # Secrets — RESOLVED FROM VAULT, not env. Placeholders here.
+    # api_token: the Meta permanent system-user access token (bearer header)
+    # verify_token: the random string registered in the Meta App Dashboard to prove
+    #   you control the webhook URL (checked on GET /webhooks/whatsapp)
+    whatsapp_api_token: SecretStr = Field(default=SecretStr("from-vault"))
+    whatsapp_verify_token: SecretStr = Field(default=SecretStr("from-vault"))
+
     # Rate limiting (Phase 8, Task 8.1). Default requests-per-minute applied to
     # customer-facing endpoints when the tenant has no `rate_limit_rpm` policy row.
     # A per-tenant policy value of "0" means no limit (explicit bypass).

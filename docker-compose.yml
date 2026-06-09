@@ -119,7 +119,10 @@ services:
         vault kv put secret/modir/mail \
           api_key="${MAIL_API_KEY:-dev-mail-key-rotate-before-prod}" &&
         vault kv put secret/modir/ocr \
-          service_account_json="$$OCR_JSON"
+          service_account_json="$$OCR_JSON" &&
+        vault kv put secret/modir/whatsapp \
+          api_token="${WHATSAPP_API_TOKEN:-dev-whatsapp-token-placeholder}" \
+          verify_token="${WHATSAPP_VERIFY_TOKEN:-dev-verify-token-changeme}"
 
   migrate:
     build:
