@@ -185,12 +185,70 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # ── Backup service (Phase 8, Task 8.8) ───────────────────────────────────
+  # Run on demand: docker compose --profile backup run --rm backup
+  # Restore:       docker compose --profile backup run --rm backup /app/scripts/restore.sh
+  backup:
+    build:
+      context: ./backend
+    image: modir-backend
+    profiles: [backup]
+    command: ["/bin/bash", "/app/scripts/backup.sh"]
+    volumes:
+      - "./backups:/app/backups"
+    environment:
+      - DATABASE_URL
+      - MINIO_ENDPOINT
+      - MINIO_ACCESS_KEY
+      - MINIO_SECRET_KEY
+      - MINIO_BUCKET
+      - MINIO_SECURE
+    networks:
+      - modir_net
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Observability stack (Phase 8, Task 8.6) ──────────────────────────────
+  # Start with: docker compose --profile observability up
+  # Then set LOKI_URL=http://loki:3100 in .env so the API ships logs.
+  loki:
+    image: grafana/loki:2.9.0
+    profiles: [observability]
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+    networks:
+      - modir_net
+    command: -config.file=/etc/loki/local-config.yaml
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    profiles: [observability]
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+    volumes:
+      - "./infra/grafana/provisioning:/etc/grafana/provisioning"
+      - "./infra/grafana/dashboards:/var/lib/grafana/dashboards"
+      - grafana_data:/var/lib/grafana
+    networks:
+      - modir_net
+    depends_on:
+      - loki
+
 volumes:
   db_data:
   redis_data:
   minio_data:
   vault_data:
   api_logs:
+  loki_data:
+  grafana_data:
 
 networks:
   modir_net:

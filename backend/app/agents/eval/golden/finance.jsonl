@@ -1,0 +1,22 @@
+{"query_ar": "كيف مبيعاتي اليوم؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "daily sales query"}
+{"query_ar": "قديش ربحت هالأسبوع؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "weekly revenue"}
+{"query_ar": "شو الإيرادات هالشهر؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "monthly revenue"}
+{"query_ar": "في شي غريب بالمبيعات؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary", "flag_anomalies", "explain_anomaly"], "notes": "anomaly detection query"}
+{"query_ar": "مبيعاتي أحسن من الأسبوع الماضي؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "week-over-week comparison"}
+{"query_ar": "شو الدخل اليومي المتوسط؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "average daily income"}
+{"query_ar": "كيف ماليتي هالشهر؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "monthly finances overview"}
+{"query_ar": "في يوم كانت المبيعات غريبة؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary", "flag_anomalies"], "notes": "anomaly day query"}
+{"query_ar": "شو أحسن يوم مبيعات؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "best sales day"}
+{"query_ar": "شو التغير بالإيرادات؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "revenue change"}
+{"query_ar": "عطيني تقرير مالي", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "financial report request"}
+{"query_ar": "كيف الأرباح مقارنة بالشهر الماضي؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "month-over-month comparison"}
+{"query_ar": "في خسارة؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary", "flag_anomalies"], "notes": "loss check"}
+{"query_ar": "شو أكثر يوم ربح؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "most profitable day"}
+{"query_ar": "كيف كانت إيرادات رمضان؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "Ramadan revenue (Lebanese seasonality)"}
+{"query_ar": "شو التغير بالمبيعات هالأسبوع؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "weekly sales change"}
+{"query_ar": "في انخفاض بالمبيعات؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary", "flag_anomalies"], "notes": "sales decline check"}
+{"query_ar": "شو متوسط الفاتورة؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "average ticket size"}
+{"query_ar": "كيف المبيعات مقارنة بالسنة الماضية؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "year-over-year comparison"}
+{"query_ar": "عندي يوم بشوي؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary", "flag_anomalies"], "notes": "slow day anomaly check"}
+{"query_ar": "شو الإيراد الإجمالي هالأسبوع؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary"], "notes": "total weekly revenue"}
+{"query_ar": "في شي مش طبيعي بأرقام اليوم؟", "expected_intent": "finance", "expected_tools": ["get_revenue_summary", "flag_anomalies", "explain_anomaly"], "notes": "unusual daily numbers"}

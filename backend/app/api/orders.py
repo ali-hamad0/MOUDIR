@@ -2,19 +2,23 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agents.order.schemas import ConfirmedOrder, ParsedOrderItem
 from app.api.deps import get_current_user
 from app.api.schemas.orders import OrderItemRead, OrderRead, OrdersPage
 from app.db.models import User
 from app.db.session import get_db_session
-from app.domain.errors import InsufficientStock
+from app.domain.errors import InsufficientStock, ProductNotInCatalog, ProductUnavailable
+from app.repositories.customers import CustomerRepository
 from app.repositories.orders import OrderRepository
 from app.services.order_completion import (
     OrderCompletionService,
     OrderNotCompletable,
     OrderNotFound,
 )
+from app.services.orders import OrderService
 from prompts import inventory_ar
 
 router = APIRouter(tags=["orders"])
@@ -22,6 +26,19 @@ router = APIRouter(tags=["orders"])
 # Tenant scope comes from the authenticated user's JWT, never the request body.
 CurrentUser = Annotated[User, Depends(get_current_user)]
 Db = Annotated[AsyncSession, Depends(get_db_session)]
+
+
+# ── Manual order schemas (Phase 8, Task 8.5) ─────────────────────────────────
+
+
+class ManualOrderItem(BaseModel):
+    product_id: UUID
+    quantity: int = Field(ge=1)
+
+
+class ManualOrderRequest(BaseModel):
+    customer_phone: str = Field(min_length=4, max_length=32)
+    items: list[ManualOrderItem] = Field(min_length=1)
 
 
 @router.get("/orders/today", response_model=OrdersPage)
@@ -112,4 +129,57 @@ async def complete_order(order_id: UUID, request: Request, user: CurrentUser, db
         customer_id=order.customer_id,
         customer_display_name=None,
         items=[OrderItemRead.model_validate(i) for i in items],
+    )
+
+
+@router.post("/orders/manual", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
+async def create_manual_order(
+    body: ManualOrderRequest,
+    user: CurrentUser,
+    db: Db,
+) -> OrderRead:
+    """Dashboard owner creates an order manually — no AI, no ActionGate.
+
+    The owner is the operator; direct dashboard entry IS the human approval
+    (Constitution V). tenant_id comes exclusively from the JWT.
+
+    404 if the customer phone is not found for this tenant.
+    422 if any product_id is invalid or belongs to another tenant (The Wall).
+    """
+    tenant_id = user.tenant_id
+
+    customer = await CustomerRepository(db).get_by_phone(tenant_id, body.customer_phone)
+    if customer is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "ما لقينا هالزبون بمحلك.")
+
+    confirmed = ConfirmedOrder(
+        items=[ParsedOrderItem(product_id=i.product_id, quantity=i.quantity) for i in body.items],
+    )
+    try:
+        order = await OrderService(db).create_order(
+            tenant_id=tenant_id,
+            customer_id=customer.id,
+            confirmed=confirmed,
+            source="manual",
+        )
+    except ProductNotInCatalog:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "منتج غير موجود بكتالوج محلك."
+        ) from None
+    except ProductUnavailable:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "منتج مش متوفر هلّق.") from None
+
+    order_repo = OrderRepository(db)
+    order_items = await order_repo.items_for_orders(tenant_id, [order.id])
+    return OrderRead(
+        id=order.id,
+        status=order.status,
+        fulfillment_type=order.fulfillment_type,
+        requested_time_text=order.requested_time_text,
+        total_lbp=order.total_lbp,
+        total_usd=order.total_usd,
+        created_at=order.created_at,
+        customer_id=order.customer_id,
+        customer_display_name=customer.display_name,
+        items=[OrderItemRead.model_validate(i) for i in order_items],
     )

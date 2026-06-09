@@ -11,6 +11,8 @@ import BillsPage from "./pages/BillsPage";
 import CustomersPage from "./pages/CustomersPage";
 import DashboardPage from "./pages/DashboardPage";
 import InsightsPage from "./pages/InsightsPage";
+import CostDashboardPage from "./pages/CostDashboardPage";
+import ManualOrderPage from "./pages/ManualOrderPage";
 import InventoryPage from "./pages/InventoryPage";
 import LoginPage from "./pages/LoginPage";
 import OrdersPage from "./pages/OrdersPage";
@@ -51,6 +53,8 @@ export default function App() {
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/insights" element={<InsightsPage />} />
             <Route path="/setup" element={<SetupWizard />} />
+            <Route path="/orders/manual" element={<ManualOrderPage />} />
+            <Route path="/costs" element={<CostDashboardPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

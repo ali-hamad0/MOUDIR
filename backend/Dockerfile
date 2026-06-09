@@ -30,6 +30,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# postgresql-client ships pg_dump / psql for the backup/restore scripts (Task 8.8).
+# No external binary downloads — pure apt, same sources the builder already uses.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy the prebuilt virtual environment from the builder. No toolchain, no uv.
 COPY --from=builder /app/.venv /app/.venv
 
@@ -41,6 +47,7 @@ COPY app ./app
 COPY prompts ./prompts
 COPY alembic ./alembic
 COPY alembic.ini ./
+COPY scripts ./scripts
 
 RUN mkdir -p /var/log/modir
 

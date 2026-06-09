@@ -11,12 +11,15 @@ see no change. Adding a provider is a change in the provider list passed to
 FallbackLLMRouter, never in any agent, service, or tool.
 """
 
+import time
 from typing import Protocol, runtime_checkable
 
 from langchain_core.language_models import BaseChatModel
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.infra.settings import Settings
+
+_UNHEALTHY_WINDOW = 60.0  # seconds before the circuit resets automatically
 
 
 @runtime_checkable
@@ -34,6 +37,18 @@ class LLMRouter(Protocol):
 
     def tier2(self) -> BaseChatModel:
         """Tier 2 (stronger) model — reserved for harder language work."""
+        ...
+
+    def is_healthy(self) -> bool:
+        """True if no LLMUnavailable has fired in the last 60 s."""
+        ...
+
+    def mark_healthy(self) -> None:
+        """Called by the supervisor after a successful LLM call."""
+        ...
+
+    def mark_unhealthy(self) -> None:
+        """Called by the supervisor when LLMUnavailable is caught."""
         ...
 
 
@@ -63,6 +78,15 @@ class GeminiRouter:
     def tier2(self) -> BaseChatModel:
         return self._build(self._settings.llm_tier2_model)
 
+    def is_healthy(self) -> bool:
+        return True
+
+    def mark_healthy(self) -> None:
+        pass
+
+    def mark_unhealthy(self) -> None:
+        pass
+
 
 class FallbackLLMRouter:
     """Phase 7 router: tries providers in order, falls back on any API error.
@@ -74,12 +98,16 @@ class FallbackLLMRouter:
 
     Callers receive a standard BaseChatModel (or RunnableWithFallbacks, which
     implements the same interface) — they never see the fallback logic.
+
+    Phase 8 (Task 8.5): tracks a time-based circuit breaker so the dashboard
+    can show an "AI unavailable" banner without polling the LLM.
     """
 
     def __init__(self, providers: list[LLMRouter]) -> None:
         if not providers:
             raise ValueError("FallbackLLMRouter requires at least one provider")
         self._providers = providers
+        self._last_failure: float | None = None
 
     def tier1(self) -> BaseChatModel:
         return self._chain("tier1")
@@ -97,3 +125,14 @@ class FallbackLLMRouter:
             models[1:],
             exceptions_to_handle=(Exception,),
         )
+
+    def is_healthy(self) -> bool:
+        if self._last_failure is None:
+            return True
+        return (time.monotonic() - self._last_failure) > _UNHEALTHY_WINDOW
+
+    def mark_healthy(self) -> None:
+        self._last_failure = None
+
+    def mark_unhealthy(self) -> None:
+        self._last_failure = time.monotonic()

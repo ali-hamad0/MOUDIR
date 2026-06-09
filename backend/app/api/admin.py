@@ -21,6 +21,7 @@ from app.infra.security import create_admin_token, verify_password
 from app.infra.settings import Settings, get_settings
 from app.repositories.admins import AdminRepository
 from app.repositories.agent_runs import AgentRunRepository
+from app.repositories.business_policies import BusinessPolicyRepository
 from app.repositories.signup_requests import SignupRequestRepository
 from app.services.onboarding import approve_request, reject_request
 
@@ -132,3 +133,36 @@ async def get_agent_costs(
         days_returned=len(summary),
     )
     return {str(d): agents for d, agents in summary.items()}
+
+
+@router.get("/costs/summary")
+async def get_costs_summary(
+    _admin: CurrentAdmin,
+    db: Db,
+    tenant_id: UUID,
+) -> dict:
+    """Founder-only: today's LLM spend vs budget for a tenant.
+
+    Returns {today_usd, budget_usd, percentage, alert_triggered}.
+    budget_usd = 0 means no limit (alert_triggered is always False).
+    """
+    today = date.today()
+    summary = await AgentRunRepository(db).daily_summary(tenant_id, from_date=today, to_date=today)
+    today_usd = sum(sum(agents.values()) for agents in summary.values())
+
+    budget_policy = await BusinessPolicyRepository(db).get_by_key(tenant_id, "daily_llm_budget_usd")
+    budget_usd = float(budget_policy.value or 0) if budget_policy else 0.0
+
+    if budget_usd > 0:
+        percentage = round((today_usd / budget_usd) * 100, 2)
+        alert_triggered = today_usd >= budget_usd
+    else:
+        percentage = 0.0
+        alert_triggered = False
+
+    return {
+        "today_usd": round(today_usd, 6),
+        "budget_usd": budget_usd,
+        "percentage": percentage,
+        "alert_triggered": alert_triggered,
+    }

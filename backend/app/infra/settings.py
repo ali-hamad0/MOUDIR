@@ -174,6 +174,10 @@ class Settings(BaseSettings):
     # A per-tenant policy value of "0" means no limit (explicit bypass).
     rate_limit_default_rpm: int = Field(default=30)
 
+    # Log aggregator (Phase 8, Task 8.6). Empty string disables Loki shipping.
+    # Set to http://loki:3100 when running with --profile observability.
+    loki_url: str = Field(default="")
+
     # Paths
     base_dir: Path = Field(default=Path(__file__).parent.parent.parent)
 

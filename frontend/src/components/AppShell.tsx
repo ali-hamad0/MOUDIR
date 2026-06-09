@@ -5,6 +5,7 @@ import { useAuth } from "../auth/context";
 import { planLabel, t } from "../i18n";
 import { BOTTOM_NAV_ITEMS, NAV_ITEMS } from "../nav";
 import { LogoutIcon } from "./icons";
+import { AIStatusBanner } from "./AIStatusBanner";
 import { SetupBanner } from "./SetupBanner";
 
 const FIRST_LOGIN_REDIRECT_KEY = "modir.wizardRedirected";
@@ -103,6 +104,7 @@ export function AppShell() {
       <main className="px-4 py-5 pb-24 lg:ps-72 lg:pb-8 lg:pe-8">
         <div className="mx-auto max-w-3xl">
           {showSetupBanner && <SetupBanner />}
+          <AIStatusBanner />
           <Outlet />
         </div>
       </main>

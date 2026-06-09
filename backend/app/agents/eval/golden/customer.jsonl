@@ -1,0 +1,22 @@
+{"query_ar": "مين الزبائن اللي مش راجعين؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "churn risk query"}
+{"query_ar": "في زبائن بخطر؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "at-risk customers check"}
+{"query_ar": "بدي أرسل رسالة لزبون مش رح يرجع", "expected_intent": "customer", "expected_tools": ["get_churn_risks", "draft_reengagement", "queue_reengagement"], "notes": "re-engagement intent"}
+{"query_ar": "شو أخبار زبائني؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "customer status overview"}
+{"query_ar": "مين ما اشترى من زمان؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "lapsed customers"}
+{"query_ar": "كم زبون عندي بخطر الهروب؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "churn count"}
+{"query_ar": "بدي أتواصل مع الزبائن القديمين", "expected_intent": "customer", "expected_tools": ["get_churn_risks", "draft_reengagement"], "notes": "reach out to old customers"}
+{"query_ar": "مين أوفى زبون عندي؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "most loyal customer"}
+{"query_ar": "شو نسبة الزبائن اللي ما رجعوا؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "churn rate"}
+{"query_ar": "عندي زبائن رح يتركوني؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "churn risk check"}
+{"query_ar": "كيف أحافظ على زبائني؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks", "draft_reengagement"], "notes": "retention strategy"}
+{"query_ar": "مين الزبون اللي ما اشترى من أكثر من شهر؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "month-lapsed customers"}
+{"query_ar": "بدي حملة استرداد زبائن", "expected_intent": "customer", "expected_tools": ["get_churn_risks", "draft_reengagement", "queue_reengagement"], "notes": "recovery campaign intent"}
+{"query_ar": "شو حال الزبائن الجدد؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "new customers status"}
+{"query_ar": "في زبائن مش راضيين؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "unhappy customers check"}
+{"query_ar": "مين آخر زبون اشترى؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "last purchasing customer"}
+{"query_ar": "كيف نزيد الزبائن الثابتين؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks", "draft_reengagement"], "notes": "increase regular customers"}
+{"query_ar": "شو أكثر زبون مبيعاً؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "top customer by spend"}
+{"query_ar": "بدي عرفان الزبائن اللي بخطر", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "identify at-risk customers"}
+{"query_ar": "مين الزبائن اللي لازم أتواصل معهم اليوم؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks", "draft_reengagement"], "notes": "today contact list"}
+{"query_ar": "عمل لي قائمة بالزبائن الغايبين", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "absent customers list"}
+{"query_ar": "شو معدل عودة الزبائن؟", "expected_intent": "customer", "expected_tools": ["get_churn_risks"], "notes": "customer return rate"}

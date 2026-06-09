@@ -108,8 +108,8 @@ async def rate_limit_check(
     Fails open: a Redis outage allows traffic through (never blocks legitimate calls).
     """
     limiter: RateLimiter = request.app.state.rate_limiter
-    limit = await limiter.get_limit(identity.tenant_id, db)
-    result = await limiter.check_and_increment(identity.tenant_id, limit)
+    limit = await limiter.get_limit(identity.tenant.id, db)
+    result = await limiter.check_and_increment(identity.tenant.id, limit)
 
     if not result.allowed:
         reset_seconds = max(int(result.reset_at.timestamp() - time.time()), 1)

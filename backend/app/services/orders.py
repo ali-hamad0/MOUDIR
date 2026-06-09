@@ -31,6 +31,7 @@ class OrderService:
         customer_id: UUID,
         confirmed: ConfirmedOrder,
         raw_message: str | None = None,
+        source: str = "agent",
     ) -> Order:
         products = ProductRepository(self._session)
 
@@ -42,6 +43,7 @@ class OrderService:
             requested_time_text=confirmed.requested_time_text,
             raw_message=raw_message,
             note=confirmed.note,
+            source=source,
         )
         order = await OrderRepository(self._session).add(tenant_id, order)
 

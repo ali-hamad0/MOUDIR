@@ -289,3 +289,26 @@ export interface AnomalyPredictions {
   mode: string;
   items: AnomalyDay[];
 }
+
+// ---- Manual order (Phase 8, Task 8.5) ----
+
+export interface ManualOrderItem {
+  product_id: string;
+  quantity: number;
+}
+
+export interface ManualOrderRequest {
+  customer_phone: string;
+  items: ManualOrderItem[];
+}
+
+export interface DailyCost {
+  date: string;
+  total_usd: number;
+  by_agent: Record<string, number>;
+}
+
+export interface DailyCostResponse {
+  days: DailyCost[];
+  budget_usd: number;
+}

@@ -1,0 +1,22 @@
+{"query_ar": "شو المنتجات قريبة تنتهي؟", "expected_intent": "inventory", "expected_tools": ["check_stock"], "notes": "low stock alert"}
+{"query_ar": "كم باقي من الكعكات؟", "expected_intent": "inventory", "expected_tools": ["check_stock"], "notes": "specific product stock query"}
+{"query_ar": "مخزوني كيف؟", "expected_intent": "inventory", "expected_tools": ["check_stock"], "notes": "general inventory status"}
+{"query_ar": "لازم أطلب بضاعة من المورد؟", "expected_intent": "inventory", "expected_tools": ["check_stock", "draft_purchase_order"], "notes": "reorder decision"}
+{"query_ar": "شو ناقصنا بالمستودع؟", "expected_intent": "inventory", "expected_tools": ["check_stock"], "notes": "warehouse shortage"}
+{"query_ar": "في منتجات خلصت؟", "expected_intent": "inventory", "expected_tools": ["check_stock"], "notes": "out-of-stock products"}
+{"query_ar": "شو مستوى المخزون؟", "expected_intent": "inventory", "expected_tools": ["check_stock"], "notes": "inventory level query"}
+{"query_ar": "لازم أجدد طلب المواد الخام؟", "expected_intent": "inventory", "expected_tools": ["check_stock", "forecast_demand"], "notes": "raw materials reorder"}
+{"query_ar": "شو المنتجات اللي تحت الحد الأدنى؟", "expected_intent": "inventory", "expected_tools": ["check_stock"], "notes": "below minimum threshold"}
+{"query_ar": "كم كيلو دقيق باقي؟", "expected_intent": "inventory", "expected_tools": ["check_stock"], "notes": "flour stock specific"}
+{"query_ar": "بدي اعمل طلب شراء", "expected_intent": "inventory", "expected_tools": ["draft_purchase_order"], "notes": "explicit purchase order intent"}
+{"query_ar": "شو المواد اللي ما بدها تقضي؟", "expected_intent": "inventory", "expected_tools": ["check_stock"], "notes": "critical stock items"}
+{"query_ar": "عمل لي تقرير المخزون", "expected_intent": "inventory", "expected_tools": ["check_stock"], "notes": "inventory report request"}
+{"query_ar": "شو أكثر منتج بيخلص بسرعة؟", "expected_intent": "inventory", "expected_tools": ["check_stock", "forecast_demand"], "notes": "fastest depleting product"}
+{"query_ar": "في شي ناقص بالمحل؟", "expected_intent": "inventory", "expected_tools": ["check_stock"], "notes": "general shortage check"}
+{"query_ar": "شو مستوى السكر؟", "expected_intent": "inventory", "expected_tools": ["check_stock"], "notes": "sugar stock specific"}
+{"query_ar": "لازم أطلب زبدة؟", "expected_intent": "inventory", "expected_tools": ["check_stock", "draft_purchase_order"], "notes": "butter reorder decision"}
+{"query_ar": "شو المنتجات اللي لازم أطلبها اليوم؟", "expected_intent": "inventory", "expected_tools": ["check_stock", "forecast_demand"], "notes": "today reorder list"}
+{"query_ar": "عطيني قائمة المشتريات المطلوبة", "expected_intent": "inventory", "expected_tools": ["check_stock", "draft_purchase_order"], "notes": "required purchases list"}
+{"query_ar": "شو احتياجاتنا للأسبوع الجاي؟", "expected_intent": "inventory", "expected_tools": ["check_stock", "forecast_demand"], "notes": "next week needs"}
+{"query_ar": "المستودع كيف هلق؟", "expected_intent": "inventory", "expected_tools": ["check_stock"], "notes": "current warehouse status"}
+{"query_ar": "شو الكميات الموجودة عندي؟", "expected_intent": "inventory", "expected_tools": ["check_stock"], "notes": "current quantities on hand"}

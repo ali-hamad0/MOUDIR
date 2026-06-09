@@ -50,6 +50,14 @@ def configure_logging() -> None:
     root_logger.handlers.clear()
     root_logger.addHandler(stream_handler)
     root_logger.addHandler(file_handler)
+
+    if settings.loki_url:
+        from app.infra.loki_handler import LokiHandler
+
+        loki_handler = LokiHandler(settings.loki_url)
+        loki_handler.setFormatter(formatter)
+        root_logger.addHandler(loki_handler)
+
     root_logger.setLevel(level)
 
     # Structlog hands events off to stdlib logging via ProcessorFormatter.
