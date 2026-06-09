@@ -1,8 +1,9 @@
+import time
 from typing import Annotated
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +11,7 @@ from app.api.schemas.webhook import WhatsAppWebhookPayload
 from app.db.models import Admin, Tenant, User
 from app.db.session import get_db_session
 from app.domain.identity import ResolvedIdentity
+from app.infra.rate_limiter import RateLimiter
 from app.infra.security import decode_access_token
 from app.infra.settings import Settings, get_settings
 from app.repositories.admins import AdminRepository
@@ -91,3 +93,28 @@ async def resolve_message_identity(
     return await IdentityResolver(db).resolve(
         to=payload.to, from_=payload.from_, display_name=payload.display_name
     )
+
+
+async def rate_limit_check(
+    request: Request,
+    identity: Annotated[ResolvedIdentity, Depends(resolve_message_identity)],
+    db: Annotated[AsyncSession, Depends(get_db_session)],
+) -> None:
+    """Phase 8 — per-tenant rate limiting on inbound webhook messages.
+
+    FastAPI deduplicates resolve_message_identity across this dependency and the
+    calling route — the identity is resolved only once per request.  On limit
+    exceeded raises HTTP 429 with a Lebanese Arabic message and Retry-After header.
+    Fails open: a Redis outage allows traffic through (never blocks legitimate calls).
+    """
+    limiter: RateLimiter = request.app.state.rate_limiter
+    limit = await limiter.get_limit(identity.tenant_id, db)
+    result = await limiter.check_and_increment(identity.tenant_id, limit)
+
+    if not result.allowed:
+        reset_seconds = max(int(result.reset_at.timestamp() - time.time()), 1)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="عذراً، لقد تجاوزت الحد المسموح به. حاول بعد قليل.",
+            headers={"Retry-After": str(reset_seconds)},
+        )

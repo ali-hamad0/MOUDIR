@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 
-from app.api.deps import resolve_message_identity
+from app.api.deps import rate_limit_check, resolve_message_identity
 from app.api.schemas.webhook import WhatsAppWebhookPayload
 from app.domain.identity import ResolvedIdentity
 
@@ -14,6 +14,7 @@ async def whatsapp_webhook(
     payload: WhatsAppWebhookPayload,
     identity: Annotated[ResolvedIdentity, Depends(resolve_message_identity)],
     request: Request,
+    _: Annotated[None, Depends(rate_limit_check)],
 ) -> dict:
     """Inbound customer/owner message entry point.
 

@@ -36,6 +36,7 @@ from app.infra.checkpointer import build_checkpointer
 from app.infra.embeddings import build_embedding_client
 from app.infra.logging import configure_logging, get_logger
 from app.infra.ocr import build_ocr_engine
+from app.infra.rate_limiter import RateLimiter
 from app.infra.settings import Settings, get_settings
 from app.infra.storage import StorageClient
 from app.infra.supplier_dispatch import SupplierDispatcher
@@ -118,6 +119,18 @@ async def lifespan(app: FastAPI):
 
     settings = resolve_secrets(settings)
     log.info("modir.vault.connected")
+
+    # Redis client (Phase 8) — used for per-tenant rate limiting. Built once here
+    # and stored on app.state so the rate_limit_check dependency can reach it per
+    # request without reopening a connection. The RateLimiter is stateless; it
+    # just needs the client and the configured default RPM.
+    from redis.asyncio import Redis as AsyncRedis
+
+    app.state.redis = AsyncRedis.from_url(
+        str(settings.redis_url), encoding="utf-8", decode_responses=True
+    )
+    app.state.rate_limiter = RateLimiter(app.state.redis, settings.rate_limit_default_rpm)
+    log.info("modir.rate_limiter.ready", default_rpm=settings.rate_limit_default_rpm)
 
     app.state.db_engine = create_engine()
     log.info("modir.db.engine.created")
@@ -245,6 +258,8 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    await app.state.redis.aclose()
+    log.info("modir.redis.closed")
     await _checkpoint_pool.close()
     log.info("modir.checkpointer.closed")
     await app.state.db_engine.dispose()
