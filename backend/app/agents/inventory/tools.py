@@ -182,7 +182,11 @@ async def _draft_note(ctx: ToolContext, product_name: str, quantity: int) -> str
     )
     messages = [
         SystemMessage(content=system),
-        HumanMessage(content=f"اكتب ملاحظة طلب: {product_name}، الكمية {quantity}"),
+        HumanMessage(
+            content=inventory_agent_ar.DRAFT_NOTE_HUMAN.format(
+                product_name=product_name, quantity=quantity
+            )
+        ),
     ]
 
     attempts = ctx.settings.llm_max_retries + 1

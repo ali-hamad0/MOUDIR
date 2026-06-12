@@ -30,6 +30,10 @@ DRAFT_NOTE_SYSTEM = """\
 الكمية المطلوبة: {quantity}
 """
 
+# Human turn that kicks off the note. {product_name} / {quantity} injected at
+# call time, same values as DRAFT_NOTE_SYSTEM.
+DRAFT_NOTE_HUMAN = "اكتب ملاحظة طلب: {product_name}، الكمية {quantity}"
+
 # Deterministic fallback used when the LLM note can't be produced (bad output
 # after retries, or a provider error). A draft must still be created — a missing
 # note must never block the reorder loop. {product_name} / {quantity} injected.

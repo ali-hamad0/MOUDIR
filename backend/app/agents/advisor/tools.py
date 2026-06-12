@@ -320,7 +320,10 @@ async def compose_briefing(
         anomaly_count=anomaly.recent_flag_count,
     )
     model = ctx.router.tier2().with_structured_output(Briefing)
-    messages = [SystemMessage(content=system), HumanMessage(content="اكتب الملخص الصباحي.")]
+    messages = [
+        SystemMessage(content=system),
+        HumanMessage(content=advisor_agent_ar.BRIEFING_HUMAN),
+    ]
 
     attempts = ctx.settings.llm_max_retries + 1
     for attempt in range(attempts):

@@ -123,7 +123,10 @@ async def draft_reengagement(ctx: ToolContext, customer: CustomerRisk) -> str:
         last_order_info=last_order_info,
     )
     model = ctx.router.tier1().with_structured_output(DraftMessage)
-    messages = [SystemMessage(content=system), HumanMessage(content="اكتب رسالة إعادة تواصل.")]
+    messages = [
+        SystemMessage(content=system),
+        HumanMessage(content=customer_agent_ar.DRAFT_HUMAN),
+    ]
 
     attempts = ctx.settings.llm_max_retries + 1
     for attempt in range(attempts):
