@@ -13,7 +13,7 @@ import {
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/context";
 import { Button } from "../components/Button";
-import { LockIcon } from "../components/icons";
+import { LockIcon, MicIcon, StopIcon } from "../components/icons";
 import { lang, t } from "../i18n";
 
 // Agent routing label → display name for the badge on each Modir bubble.
@@ -369,6 +369,11 @@ export default function OwnerChatPage() {
                 disabled={sending}
                 className={`min-h-[44px] shrink-0 ${recording ? "animate-pulse" : ""}`}
               >
+                {recording ? (
+                  <StopIcon className="h-4 w-4" />
+                ) : (
+                  <MicIcon className="h-4 w-4" />
+                )}
                 {recording ? t.chatRecordStop : t.chatRecord}
               </Button>
             ) : (
