@@ -6,6 +6,7 @@ and refuses non-catalog / unavailable products. The LLM is faked — no real cal
 """
 
 from decimal import Decimal
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -48,12 +49,21 @@ class _FakeModel:
     def with_structured_output(self, schema):
         return self._structured
 
+    async def ainvoke(self, messages):
+        # tier1_json path: parse_order reads raw JSON text off .content, so the
+        # scripted RawOrder is serialized the way the real model would emit it.
+        outcome = await self._structured.ainvoke(messages)
+        return SimpleNamespace(content=outcome.model_dump_json())
+
 
 class _FakeRouter:
     def __init__(self, structured: _FakeStructured) -> None:
         self._model = _FakeModel(structured)
 
     def tier1(self):
+        return self._model
+
+    def tier1_json(self):
         return self._model
 
     def tier2(self):
@@ -147,6 +157,23 @@ async def test_parse_order_matches_phrase_to_catalog(db_session: AsyncSession):
     assert result is not None
     assert result.items[0].product_id == avail.id
     assert result.items[0].quantity == 3
+
+
+def test_match_prefers_exact_over_earlier_containment():
+    # Regression (found live): a shop selling both "كعك" and "كعك بالسمسم" must
+    # give a sesame-kaak order the sesame product, even when plain كعك comes
+    # first in the catalog — each match tier runs over the WHOLE list.
+    from app.agents.order.tools import CatalogItem, _match_phrase_to_catalog
+
+    plain = CatalogItem(id=uuid4(), name_ar="كعك", price_lbp=50_000, is_available=True)
+    sesame = CatalogItem(id=uuid4(), name_ar="كعك بالسمسم", price_lbp=15_000, is_available=True)
+    catalog = [plain, sesame]
+
+    assert _match_phrase_to_catalog("كعك بالسمسم", catalog) is sesame
+    # The generic phrase still resolves to the exact generic product.
+    assert _match_phrase_to_catalog("كعك", catalog) is plain
+    # Containment tier: an over-specified phrase picks the most specific name.
+    assert _match_phrase_to_catalog("كعك بالسمسم عالطالع", catalog) is sesame
 
 
 async def test_parse_order_mixed_keeps_matched_drops_unmatched(db_session: AsyncSession):

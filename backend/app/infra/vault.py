@@ -55,6 +55,12 @@ def resolve_secrets(settings):
         # placeholder in dev (stub mode ignores it); a real credential is provided
         # only when ocr_mode=cloud_vision.
         "ocr_service_account_json": ("modir/ocr", "service_account_json"),
+        # WhatsApp Business API secrets (Phase 10). All three are required at
+        # startup even in dev mode (the stubs resolve cleanly; the mode flag guards
+        # actual API calls). In "dev" mode the values are never used — only the
+        # verify_token is checked by the GET handler against the incoming challenge.
+        "whatsapp_api_token": ("modir/whatsapp", "api_token"),
+        "whatsapp_verify_token": ("modir/whatsapp", "verify_token"),
     }
     for field, (path, key) in secrets_map.items():
         value = vault.read_secret(path, key)
@@ -66,6 +72,11 @@ def resolve_secrets(settings):
     optional_secrets_map = {
         "grok_api_key": ("modir/llm", "grok_api_key"),
         "anthropic_api_key": ("modir/llm", "anthropic_api_key"),
+        # Whish Pay merchant credentials (Phase 11). Optional: absent means the
+        # checkout runs in dev (simulated) mode; required in practice once
+        # WHISH_PAY_MODE=live.
+        "whish_pay_channel": ("modir/whish", "channel"),
+        "whish_pay_secret": ("modir/whish", "secret"),
     }
     resolved_optional = 0
     for field, (path, key) in optional_secrets_map.items():

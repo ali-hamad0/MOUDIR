@@ -18,10 +18,12 @@ from app.api import (
     admin,
     approvals,
     auth,
+    billing,
     bills,
     chat,
     costs,
     customers,
+    dashboard,
     health,
     inventory,
     me,
@@ -33,6 +35,7 @@ from app.api import (
     webhooks,
 )
 from app.db.session import create_engine
+from app.infra.audio_transcriber import build_audio_transcriber
 from app.infra.bill_committer import BillCommitter
 from app.infra.checkpointer import build_checkpointer
 from app.infra.embeddings import build_embedding_client
@@ -42,7 +45,9 @@ from app.infra.rate_limiter import RateLimiter
 from app.infra.settings import Settings, get_settings
 from app.infra.storage import StorageClient
 from app.infra.supplier_dispatch import SupplierDispatcher
+from app.infra.tts import build_speech_synthesizer
 from app.infra.vault import resolve_secrets
+from app.infra.whatsapp import build_whatsapp_client
 from app.ml.predictors import (
     build_anomaly_detector,
     build_churn_predictor,
@@ -247,6 +252,17 @@ async def lifespan(app: FastAPI):
     # structures that text (constitution IV). The provider SDK stays confined to
     # app/infra/ocr/cloud_vision.py.
     app.state.ocr_engine = build_ocr_engine(settings)
+    # WhatsApp reply client (Phase 10). Built once here; the webhook handler
+    # calls send_text() after every successful dispatch. In dev mode it logs
+    # only and never calls the real Meta API.
+    app.state.whatsapp_client = build_whatsapp_client(settings)
+    # Audio transcriber (Phase 10, Task 10.5). Built once here; the webhook
+    # handler calls transcribe() when an audio message arrives before dispatch.
+    # In dev mode returns the Arabic stub without calling Gemini.
+    app.state.audio_transcriber = build_audio_transcriber(settings)
+    # Speech synthesizer (Phase 10 — dashboard voice chat). The voice endpoint
+    # speaks Modir's reply back. In dev mode returns a silent WAV stub.
+    app.state.speech_synthesizer = build_speech_synthesizer(settings)
     log.info(
         "modir.agents.ready",
         langsmith=settings.langsmith_tracing,
@@ -325,7 +341,9 @@ def create_app() -> FastAPI:
     app.include_router(approvals.router)
     app.include_router(bills.router)
     app.include_router(customers.router)
+    app.include_router(dashboard.router)
     app.include_router(me.router)
+    app.include_router(billing.router)
     app.include_router(predictions.router)
     app.include_router(chat.router)
     app.include_router(webhooks.router)

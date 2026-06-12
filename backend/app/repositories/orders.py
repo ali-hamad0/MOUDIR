@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -78,6 +78,65 @@ class OrderRepository(TenantScopedRepository[Order]):
         if tenant_id is None:
             raise ValueError("tenant_id is required on every repository query")
         return select(OrderItem).where(OrderItem.tenant_id == tenant_id)
+
+    # ── Dashboard aggregates (Phase 10) ────────────────────────────────────
+    # All grouped in Beirut-local days (the shop's calendar), all tenant-scoped.
+
+    async def daily_totals(
+        self, tenant_id: UUID, *, days: int, now: datetime | None = None
+    ) -> Sequence[Row]:
+        """(day, orders, revenue_lbp) per Beirut day over the trailing window.
+        Days with no orders simply don't appear — the API fills the gaps so the
+        chart x-axis is continuous."""
+        window_start = beirut_day_start(now) - timedelta(days=days - 1)
+        day = func.date(func.timezone("Asia/Beirut", Order.created_at)).label("day")
+        stmt = (
+            select(
+                day,
+                func.count().label("orders"),
+                func.coalesce(func.sum(Order.total_lbp), 0).label("revenue_lbp"),
+            )
+            .where(Order.tenant_id == tenant_id, Order.created_at >= window_start)
+            .group_by(day)
+            .order_by(day)
+        )
+        return (await self._session.execute(stmt)).all()
+
+    async def top_products(
+        self, tenant_id: UUID, *, days: int, k: int, now: datetime | None = None
+    ) -> Sequence[Row]:
+        """(name, units) for the k best-selling products over the trailing
+        window, by snapshotted item name (a later catalog rename can't rewrite
+        history). The JOIN to orders is scoped on BOTH sides (constitution I)."""
+        window_start = beirut_day_start(now) - timedelta(days=days - 1)
+        stmt = (
+            select(
+                OrderItem.name_ar_snapshot.label("name"),
+                func.sum(OrderItem.quantity).label("units"),
+            )
+            .join(
+                Order,
+                (Order.id == OrderItem.order_id) & (Order.tenant_id == OrderItem.tenant_id),
+            )
+            .where(OrderItem.tenant_id == tenant_id, Order.created_at >= window_start)
+            .group_by(OrderItem.name_ar_snapshot)
+            .order_by(func.sum(OrderItem.quantity).desc())
+            .limit(k)
+        )
+        return (await self._session.execute(stmt)).all()
+
+    async def status_counts(
+        self, tenant_id: UUID, *, days: int, now: datetime | None = None
+    ) -> Sequence[Row]:
+        """(status, count) over the trailing window — the donut's slices."""
+        window_start = beirut_day_start(now) - timedelta(days=days - 1)
+        stmt = (
+            select(Order.status, func.count().label("count"))
+            .where(Order.tenant_id == tenant_id, Order.created_at >= window_start)
+            .group_by(Order.status)
+            .order_by(func.count().desc())
+        )
+        return (await self._session.execute(stmt)).all()
 
 
 class OrderItemRepository(TenantScopedRepository[OrderItem]):

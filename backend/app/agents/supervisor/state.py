@@ -15,3 +15,7 @@ class SupervisorState(TypedDict, total=False):
     intent: str  # classified intent: order|inventory|finance|customer|advisor
     routed_to: str  # which agent node handled this turn (same value as intent)
     response: str  # the specialist agent's Lebanese Arabic reply
+    # A proposed stock edit awaiting the owner's «نعم/لا» (Phase 10). All-primitive
+    # dict (see InventoryAgent.propose_adjustment) — it persists in the Postgres
+    # checkpoint between turns, which is what makes the confirmation flow work.
+    pending_adjustment: dict | None

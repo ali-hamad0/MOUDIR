@@ -7,9 +7,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models import Product, Supplier, SupplierBill, SupplierBillLine
 from app.repositories.base import TenantScopedRepository
 
-# What the owner's bill-review list shows: bills awaiting a human (extracted) plus
-# the ones that failed OCR/extraction and need attention (manual entry / retry).
+# Bills strictly awaiting a human (extracted) plus the ones that failed
+# OCR/extraction and need attention (manual entry / retry).
 REVIEW_STATUSES = ("extracted", "ocr_failed")
+
+# The full lifecycle the فواتير الموردين page lists (Phase 10): a fresh scan shows
+# up immediately (uploaded/processing, watched by the page's 5s poll), and recently
+# approved/rejected bills STAY visible instead of vanishing on approval.
+LIFECYCLE_STATUSES = (
+    "uploaded",
+    "ocr_processing",
+    "extracted",
+    "ocr_failed",
+    "committing",
+    "committed",
+    "rejected",
+)
 
 # What the worker claims to OCR: freshly uploaded bills not yet picked up. (A bill
 # stuck in `ocr_processing` after a worker crash is re-claimable too — Task 5.8
@@ -27,6 +40,18 @@ class SupplierBillRepository(TenantScopedRepository[SupplierBill]):
     """
 
     model = SupplierBill
+
+    async def count_created_since(self, tenant_id: UUID, since) -> int:
+        """Bills uploaded since `since` — the free-plan monthly OCR quota."""
+        stmt = (
+            select(func.count())
+            .select_from(SupplierBill)
+            .where(
+                SupplierBill.tenant_id == tenant_id,
+                SupplierBill.created_at >= since,
+            )
+        )
+        return (await self._session.execute(stmt)).scalar_one()
 
     async def list_for_review(
         self,

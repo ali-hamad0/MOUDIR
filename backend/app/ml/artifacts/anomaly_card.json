@@ -2,8 +2,8 @@
   "task": "anomaly",
   "model": "zscore",
   "metric": "f1",
-  "cv_mean": 0.9636184857423796,
-  "cv_std": 0.003343582598855528,
+  "cv_mean": 0.8548013867424084,
+  "cv_std": 0.0004344012363727501,
   "n_splits": 5,
   "features": [
     "day_of_week",
@@ -16,16 +16,16 @@
     "baseline_std"
   ],
   "target": "revenue",
-  "n_rows": 1092,
-  "n_tenants": 3,
+  "n_rows": 1153,
+  "n_tenants": 4,
   "data_source": "synthetic",
   "extra": {
     "method": "zscore",
     "threshold": 3.5,
-    "precision": 0.933,
-    "recall": 0.9963,
+    "precision": 0.7474,
+    "recall": 0.9983,
     "inject_frac": 0.1
   },
   "notes": "Unsupervised. Expected revenue from a seasonal model (Ramadan/summer/weekend are expected, not anomalies); flagged on the SCALE-FREE relative residual so one threshold works across tenants. Scored by injecting synthetic spikes/collapses (no real labels). Threshold is tunable; this card records the chosen value.",
-  "trained_at": "2026-06-06T12:22:13.627104+00:00"
+  "trained_at": "2026-06-10T19:46:57.520077+00:00"
 }

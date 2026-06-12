@@ -9,6 +9,7 @@ Two layers (GUARDRAILS.md):
 """
 
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import func, select
@@ -43,12 +44,20 @@ class _FakeModel:
     def with_structured_output(self, schema):
         return self._s
 
+    async def ainvoke(self, messages):
+        # tier1_json path: parse_order reads raw JSON text off .content.
+        outcome = await self._s.ainvoke(messages)
+        return SimpleNamespace(content=outcome.model_dump_json())
+
 
 class _FakeRouter:
     def __init__(self, s):
         self._m = _FakeModel(s)
 
     def tier1(self):
+        return self._m
+
+    def tier1_json(self):
         return self._m
 
     def tier2(self):

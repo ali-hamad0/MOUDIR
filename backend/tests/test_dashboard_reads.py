@@ -14,8 +14,18 @@ from app.api.me import whoami
 from app.api.orders import orders_today
 from app.db.models import BusinessProfile, Customer, Order, OrderItem, Product, Tenant, User
 from app.infra.security import hash_password
+from app.infra.settings import Settings
 from app.repositories.users import UserRepository
 from tests.conftest import TwoTenants
+
+# whoami takes Settings for the billing fields (Phase 11). Built explicitly —
+# get_settings() needs the full stack env; tests stay self-contained.
+_SETTINGS = Settings(
+    database_url="postgresql+asyncpg://x:x@localhost:5432/x",
+    redis_url="redis://localhost:6379/0",
+    vault_addr="http://localhost:8200",
+    vault_token="test",
+)
 
 
 async def _user(db: AsyncSession, tenant_id, email) -> User:
@@ -191,7 +201,7 @@ async def test_me_setup_complete_flips(db_session: AsyncSession) -> None:
     await db_session.flush()
     user = await _user(db_session, tenant.id, "me@me.com")
 
-    before = await whoami(user=user, db=db_session)
+    before = await whoami(user=user, db=db_session, settings=_SETTINGS)
     assert before.setup_complete is False
     assert before.product_count == 0
     assert before.plan_tier == "free"
@@ -206,7 +216,7 @@ async def test_me_setup_complete_flips(db_session: AsyncSession) -> None:
     db_session.add(Product(tenant_id=tenant.id, name_ar="كعك", price_lbp=1000))
     await db_session.flush()
 
-    after = await whoami(user=user, db=db_session)
+    after = await whoami(user=user, db=db_session, settings=_SETTINGS)
     assert after.setup_complete is True
     assert after.product_count == 1
     assert after.business_name == "فرن أبو خالد"
@@ -217,7 +227,7 @@ async def test_me_returns_only_callers_tenant(
 ) -> None:
     a, b = two_tenants.a, two_tenants.b
     user_a = await _user(db_session, a.tenant_id, a.user_email)
-    me = await whoami(user=user_a, db=db_session)
+    me = await whoami(user=user_a, db=db_session, settings=_SETTINGS)
     assert me.tenant_id == a.tenant_id
     assert me.tenant_id != b.tenant_id
     assert me.email == a.user_email

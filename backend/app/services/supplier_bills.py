@@ -141,17 +141,27 @@ class SupplierBillService:
         statuses: Sequence[str] = REVIEW_STATUSES,
         limit: int,
         offset: int,
+        presign=None,
     ) -> tuple[int, list[BillRead]]:
         """One page of this tenant's review list plus the total count, both scoped.
 
         Joins each bill to its supplier (if mapped) for display — the JOIN is
         tenant-scoped on both sides in the repo (constitution I). Read-only; no
-        commit (the caller's request transaction is closed by the session dep)."""
+        commit (the caller's request transaction is closed by the session dep).
+
+        `presign` is an optional async callable (object_key -> URL) the route
+        injects so each item carries a thumbnail link of the scan (Phase 10) —
+        storage stays an infra concern owned by the route, never imported here."""
         total = await self._repo.count_for_review(tenant_id, statuses=statuses)
         rows = await self._repo.list_for_review(
             tenant_id, statuses=statuses, limit=limit, offset=offset
         )
-        items = [_to_read(bill, supplier) for bill, supplier in rows]
+        items = []
+        for bill, supplier in rows:
+            read = _to_read(bill, supplier)
+            if presign is not None:
+                read.image_url = await presign(bill.object_key)
+            items.append(read)
         return total, items
 
     async def get_with_lines(

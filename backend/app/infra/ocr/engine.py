@@ -131,6 +131,13 @@ def build_ocr_engine(settings: Settings) -> OCREngine:
 
         log.info("ocr.engine.selected", mode=mode)
         return CloudVisionOCREngine(settings)
+    if mode == "gemini":
+        # Real OCR with the EXISTING Gemini key (no GCP service account needed) —
+        # Phase 10. Lazy import mirrors the cloud_vision branch.
+        from app.infra.ocr.gemini_vision import GeminiOCREngine
+
+        log.info("ocr.engine.selected", mode=mode)
+        return GeminiOCREngine(settings)
     if mode == "tesseract":
         raise NotImplementedError(
             "ocr_mode='tesseract' is reserved as a documented offline fallback; "

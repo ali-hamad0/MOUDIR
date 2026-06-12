@@ -35,6 +35,10 @@ class LLMRouter(Protocol):
         """Tier 1 (cheap, fast) model — order parsing, classification."""
         ...
 
+    def tier1_json(self) -> BaseChatModel:
+        """Tier 1 model forced into JSON output mode (bypasses Gemini AFC)."""
+        ...
+
     def tier2(self) -> BaseChatModel:
         """Tier 2 (stronger) model — reserved for harder language work."""
         ...
@@ -63,17 +67,27 @@ class GeminiRouter:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    def _build(self, model: str) -> BaseChatModel:
+    def _build(self, model: str, response_mime_type: str | None = None) -> BaseChatModel:
+        kwargs: dict = {}
+        if response_mime_type:
+            kwargs["response_mime_type"] = response_mime_type
         return ChatGoogleGenerativeAI(
             model=model,
             google_api_key=self._settings.gemini_api_key.get_secret_value(),
             temperature=0,
+            **kwargs,
         )
 
     def tier1(self) -> BaseChatModel:
         # Tier 1 = Flash for parsing (constitution's tier rule; ROADMAP pitfall:
         # do not use Pro for the parse step — Flash is enough and cheaper).
         return self._build(self._settings.llm_tier1_model)
+
+    def tier1_json(self) -> BaseChatModel:
+        # JSON mode disables Gemini's Automatic Function Calling (AFC) which
+        # otherwise intercepts plain text generation and returns empty results
+        # for Arabic order messages.
+        return self._build(self._settings.llm_tier1_model, response_mime_type="application/json")
 
     def tier2(self) -> BaseChatModel:
         return self._build(self._settings.llm_tier2_model)
@@ -111,6 +125,9 @@ class FallbackLLMRouter:
 
     def tier1(self) -> BaseChatModel:
         return self._chain("tier1")
+
+    def tier1_json(self) -> BaseChatModel:
+        return self._chain("tier1_json")
 
     def tier2(self) -> BaseChatModel:
         return self._chain("tier2")

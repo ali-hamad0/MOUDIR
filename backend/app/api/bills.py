@@ -60,6 +60,12 @@ from app.infra.bill_committer import COMMIT_ACTION
 from app.infra.logging import get_logger
 from app.infra.settings import Settings, get_settings
 from app.infra.storage import StorageClient
+from app.repositories.supplier_bills import LIFECYCLE_STATUSES, SupplierBillRepository
+from app.services.plan_gate import (
+    FREE_MAX_BILLS_PER_MONTH,
+    require_within_limit,
+    start_of_month,
+)
 from app.services.supplier_bills import (
     InvalidBillTransition,
     LineUpdate,
@@ -124,6 +130,14 @@ async def upload_bill(
     blocks on it. tenant_id comes from the JWT; the key is built server-side, so the
     object can only land under this tenant's prefix (the Wall).
     """
+    # Free plan: a monthly OCR-bill quota (plan_gate) — Pro is unlimited.
+    uploaded_this_month = await SupplierBillRepository(db).count_created_since(
+        user.tenant_id, start_of_month()
+    )
+    await require_within_limit(
+        db, user.tenant_id, "bills", uploaded_this_month, FREE_MAX_BILLS_PER_MONTH
+    )
+
     content_type = (file.content_type or "").lower()
     if content_type not in settings.bill_upload_allowed_content_types:
         raise HTTPException(
@@ -168,16 +182,32 @@ async def upload_bill(
 
 @router.get("/bills", response_model=BillsPage)
 async def list_bills(
+    request: Request,
     user: CurrentUser,
     db: Db,
+    settings: Config,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> BillsPage:
-    """This tenant's review list: bills awaiting a human (`extracted`) plus the ones
-    that failed OCR (`ocr_failed`), joined to supplier, newest first. Scoped to the
-    JWT tenant — never shows another tenant's bills (the Wall)."""
+    """This tenant's bill list across the whole lifecycle — a fresh scan appears
+    immediately (uploaded/processing), review candidates (`extracted`/`ocr_failed`)
+    are clickable, and recently approved/rejected bills stay visible (Phase 10).
+    Joined to supplier, newest first; scoped to the JWT tenant — never shows
+    another tenant's bills (the Wall). Each item carries a presigned thumbnail URL
+    so the list shows the scan itself; the key is tenant-prefixed, so a URL can
+    only ever point at this tenant's object."""
+    storage: StorageClient = request.app.state.storage
+    ttl = timedelta(minutes=settings.bill_image_url_ttl_minutes)
+
+    async def _presign(object_key: str) -> str:
+        return await storage.presigned_get(object_key, ttl)
+
     total, items = await SupplierBillService(db).list_for_review(
-        tenant_id=user.tenant_id, limit=limit, offset=offset
+        tenant_id=user.tenant_id,
+        statuses=LIFECYCLE_STATUSES,
+        limit=limit,
+        offset=offset,
+        presign=_presign,
     )
     return BillsPage(items=items, total=total, limit=limit, offset=offset)
 

@@ -27,7 +27,7 @@ so the golden-eval script (Task 7.10) can import it directly.
 
 from typing import Literal
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
 from app.infra.logging import get_logger
@@ -46,6 +46,49 @@ class _IntentClassification(BaseModel):
     intent: Intent
 
 
+# Whole-word confirmation heuristics for the pending stock-edit gate (Phase 10).
+# Deterministic and LLM-free: a confirmation must never be hallucinated. Checked
+# on the NORMALIZED first token only — "نعم، وكمان شو ناقص؟" still counts as yes;
+# anything that doesn't open with a clear yes/no is treated as a new message
+# (the stale proposal is dropped and normal intent routing takes over).
+_YES_WORDS = frozenset(
+    {
+        "نعم",
+        "اي",
+        "ايه",
+        "ايوا",
+        "ايوه",
+        "اكيد",
+        "تمام",
+        "موافق",
+        "ماشي",
+        "اوك",
+        "اوكي",
+        "yes",
+        "ok",
+    }
+)
+_NO_WORDS = frozenset({"لا", "كلا", "مش", "لغي", "الغي", "الغاء", "بطل", "no"})
+
+
+def _normalize_token(token: str) -> str:
+    token = token.strip(" .،,!؟?؛:«»\"'")
+    return token.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ى", "ي").lower()
+
+
+def parse_confirmation(message: str) -> Literal["yes", "no"] | None:
+    """Read a yes/no off the message's first token, or None when it is neither."""
+    tokens = message.split()
+    if not tokens:
+        return None
+    first = _normalize_token(tokens[0])
+    if first in _YES_WORDS:
+        return "yes"
+    if first in _NO_WORDS:
+        return "no"
+    return None
+
+
 async def classify_intent(message: str, llm) -> Intent:
     """Classify the owner's message into one of five intent classes.
 
@@ -58,7 +101,9 @@ async def classify_intent(message: str, llm) -> Intent:
     model = llm.with_structured_output(_IntentClassification)
     system = supervisor_ar.CLASSIFY_SYSTEM.format(message=message)
     try:
-        result: _IntentClassification = await model.ainvoke([SystemMessage(content=system)])
+        result: _IntentClassification = await model.ainvoke(
+            [SystemMessage(content=system), HumanMessage(content=message)]
+        )
         intent = result.intent
         if intent not in _VALID_INTENTS:
             log.warning(

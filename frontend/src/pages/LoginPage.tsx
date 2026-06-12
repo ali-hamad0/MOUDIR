@@ -5,6 +5,7 @@ import { ApiError } from "../api/client";
 import { useAuth } from "../auth/context";
 import { Button } from "../components/Button";
 import { Field } from "../components/Field";
+import { sanitizePhone } from "../format";
 import { t } from "../i18n";
 
 type Touched = { whatsapp_number: boolean; email: boolean; password: boolean };
@@ -38,7 +39,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login({
-        whatsapp_number: whatsapp.trim(),
+        whatsapp_number: sanitizePhone(whatsapp),
         email: email.trim(),
         password,
       });

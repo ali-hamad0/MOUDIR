@@ -1,5 +1,6 @@
 import { API_BASE_URL } from "../config";
 import { ApiError } from "./client";
+import type { DailyCostResponse } from "./types";
 
 // Admin (founder) API. Kept SEPARATE from the owner api client: the founder uses
 // a distinct token and a distinct localStorage key so the two identities never
@@ -70,6 +71,43 @@ export interface SignupRequestAdminView {
   provisioned_tenant_id: string | null;
 }
 
+export interface TenantAdminView {
+  id: string;
+  name: string;
+  whatsapp_number: string;
+  plan_tier: string;
+  is_active: boolean;
+  data_source: string | null;
+  created_at: string;
+  // Billing: raw stored fields; past_due/expired is derived client-side from
+  // current_period_end (mirrors services/billing.py).
+  subscription_status: string;
+  current_period_end: string | null;
+}
+
+export interface PaymentView {
+  id: string;
+  amount_usd: string;
+  method: string;
+  months: number;
+  note: string | null;
+  plan_tier: string;
+  period_end_after: string;
+  created_at: string;
+}
+
+export interface PaymentRecordResponse {
+  payment: PaymentView;
+  plan_tier: string;
+  subscription_status: string;
+  current_period_end: string;
+}
+
+export interface TenantDetailAdminView extends TenantAdminView {
+  customers_count: number;
+  orders_today: number;
+}
+
 export const adminApi = {
   login: (email: string, password: string) =>
     adminRequest<AdminTokenResponse>("POST", "/admin/login", { email, password }, false),
@@ -84,4 +122,33 @@ export const adminApi = {
     }),
   reject: (id: string, reason: string) =>
     adminRequest<unknown>("POST", `/admin/signup-requests/${id}/reject`, { reason }),
+  listTenants: () => adminRequest<TenantAdminView[]>("GET", "/admin/tenants"),
+  tenantDetail: (id: string) =>
+    adminRequest<TenantDetailAdminView>("GET", `/admin/tenants/${id}`),
+  tenantCosts: (id: string) =>
+    adminRequest<DailyCostResponse>("GET", `/admin/tenants/${id}/costs`),
+  suspendTenant: (id: string, reason: string) =>
+    adminRequest<unknown>("POST", `/admin/tenants/${id}/suspend`, { reason }),
+  reactivateTenant: (id: string, reason: string) =>
+    adminRequest<unknown>("POST", `/admin/tenants/${id}/reactivate`, { reason }),
+  // Billing (Phase 11): manual payments + plan changes.
+  setTenantPlan: (id: string, plan_tier: string) =>
+    adminRequest<TenantAdminView>("POST", `/admin/tenants/${id}/plan`, { plan_tier }),
+  // Founder override: set plan + paid-through directly (fix / grant / reset).
+  overrideSubscription: (
+    id: string,
+    payload: { plan_tier: string; current_period_end: string | null },
+  ) => adminRequest<TenantAdminView>("PUT", `/admin/tenants/${id}/subscription`, payload),
+  recordPayment: (
+    id: string,
+    payload: {
+      amount_usd: string;
+      method: string;
+      months: number;
+      note?: string | null;
+      plan_tier?: string | null;
+    },
+  ) => adminRequest<PaymentRecordResponse>("POST", `/admin/tenants/${id}/payments`, payload),
+  listPayments: (id: string) =>
+    adminRequest<PaymentView[]>("GET", `/admin/tenants/${id}/payments`),
 };

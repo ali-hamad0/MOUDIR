@@ -5,6 +5,7 @@ import { ApiError } from "../api/client";
 import { signupApi } from "../api/signup";
 import { Button } from "../components/Button";
 import { Field } from "../components/Field";
+import { sanitizePhone } from "../format";
 import { t } from "../i18n";
 
 export default function SignupPage() {
@@ -27,7 +28,7 @@ export default function SignupPage() {
     try {
       await signupApi.submit({
         business_name: businessName.trim(),
-        owner_phone: phone.trim(),
+        owner_phone: sanitizePhone(phone),
         owner_email: email.trim(),
       });
       setDone(true);

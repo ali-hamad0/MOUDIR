@@ -27,6 +27,14 @@ FULFILLMENT_DELIVERY = "رح يوصلك عالعنوان."
 # We could not make sense of the message as an order.
 DID_NOT_UNDERSTAND = "ما فهمت طلبك منيح. فيك تكتبلي شو بدّك بالظبط؟"
 
+# The message IS an order but we don't know the customer's name yet. The agent is
+# stateless across messages, so we ask them to resend the order WITH their name —
+# one message then carries both (enrichment picks the name up before re-parse).
+NAME_REQUIRED = (
+    "أكيد! بس قبل ما سجّل طلبك، بحب أعرف اسمك 🙂 "
+    "ابعتلي اسمك مع الطلب بنفس الرسالة، مثلاً: «اسمي سارة، بدي ٢ كعك»."
+)
+
 # An input guardrail tripped (injection / jailbreak / off-topic). Stays polite,
 # never exposes internals (Task 2.10 wires this in).
 RAIL_REFUSAL = "أنا مساعد المحل للطلبات بس. كيف فيني ساعدك بطلبك؟"

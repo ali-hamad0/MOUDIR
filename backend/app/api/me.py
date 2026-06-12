@@ -7,18 +7,22 @@ from app.api.deps import get_current_user
 from app.api.schemas.me import MeResponse
 from app.db.models import User
 from app.db.session import get_db_session
+from app.infra.settings import Settings, get_settings
 from app.repositories.business_profile import BusinessProfileRepository
 from app.repositories.products import ProductRepository
 from app.repositories.tenants import TenantRepository
+from app.services.billing import effective_subscription_status
+from app.services.plan_gate import PRO_PRICE_USD, effective_plan
 
 router = APIRouter(tags=["me"])
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
 Db = Annotated[AsyncSession, Depends(get_db_session)]
+Cfg = Annotated[Settings, Depends(get_settings)]
 
 
 @router.get("/me", response_model=MeResponse)
-async def whoami(user: CurrentUser, db: Db) -> MeResponse:
+async def whoami(user: CurrentUser, db: Db, settings: Cfg) -> MeResponse:
     """The logged-in user's tenant identity plus a derived setup_complete flag.
 
     setup_complete = the profile has a business_name AND the catalog has at least
@@ -47,4 +51,11 @@ async def whoami(user: CurrentUser, db: Db) -> MeResponse:
         plan_tier=tenant.plan_tier,
         product_count=product_count,
         setup_complete=setup_complete,
+        subscription_status=effective_subscription_status(tenant),
+        current_period_end=tenant.current_period_end,
+        billing_whish_link=settings.billing_whish_link,
+        billing_contact_phone=settings.billing_contact_phone,
+        effective_plan=effective_plan(tenant),
+        pro_price_usd=float(PRO_PRICE_USD),
+        online_checkout_enabled=settings.whish_pay_mode != "off",
     )

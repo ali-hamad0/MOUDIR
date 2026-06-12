@@ -8,15 +8,17 @@ crashes. The PO it writes is a `draft` — it NEVER sends (the human gate, 4.10/
 governs every send).
 """
 
+import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.agents.inventory.schemas import SupplierNote
+from app.agents.inventory.schemas import RawAdjustment, SupplierNote
 from app.agents.llm.router import LLMRouter
 from app.db.models import Inventory, PurchaseOrder
 from app.infra.logging import get_logger
@@ -110,6 +112,63 @@ def forecast_demand(ctx: ToolContext, inventory: Inventory) -> int:
     return suggested
 
 
+async def parse_adjustment(ctx: ToolContext, text: str) -> RawAdjustment | None:
+    """Extract a stock-edit request from an owner's Lebanese-Arabic message.
+
+    Same discipline as the order flow's parse_order: the LLM returns only the
+    RAW product phrase + action + quantity (RawAdjustment); it never picks a
+    product id — matching against the catalog happens in the caller's code.
+    Returns None when the message is not an edit (action "none"), the parse is
+    incomplete (no phrase / no quantity), or the LLM keeps failing after retries
+    — the caller falls through to the read-only status path, never crashes.
+    """
+    llm = ctx.router.tier1_json()
+    messages = [
+        SystemMessage(content=inventory_agent_ar.ADJUST_PARSE_SYSTEM),
+        HumanMessage(content=text),
+    ]
+
+    attempts = ctx.settings.llm_max_retries + 1
+    for attempt in range(attempts):
+        try:
+            response = await llm.ainvoke(messages)
+            raw_text = (response.content if hasattr(response, "content") else str(response)).strip()
+            fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw_text)
+            if fence_match:
+                raw_text = fence_match.group(1).strip()
+            raw = RawAdjustment.model_validate_json(raw_text)
+        except (ValidationError, ValueError, json.JSONDecodeError) as e:
+            log.warning(
+                "tool.parse_adjustment.invalid",
+                tenant_id=str(ctx.tenant_id),
+                attempt=attempt + 1,
+                error=str(e),
+            )
+            continue
+        except Exception as e:
+            log.warning(
+                "tool.parse_adjustment.provider_error",
+                tenant_id=str(ctx.tenant_id),
+                attempt=attempt + 1,
+                error=str(e),
+            )
+            continue
+
+        if raw.action == "none" or not raw.product_phrase.strip() or raw.quantity is None:
+            log.info("tool.parse_adjustment.not_an_edit", tenant_id=str(ctx.tenant_id))
+            return None
+        log.info(
+            "tool.parse_adjustment.ok",
+            tenant_id=str(ctx.tenant_id),
+            action=raw.action,
+            quantity=raw.quantity,
+        )
+        return raw
+
+    log.warning("tool.parse_adjustment.gave_up", tenant_id=str(ctx.tenant_id))
+    return None
+
+
 async def _draft_note(ctx: ToolContext, product_name: str, quantity: int) -> str:
     """Compose a short Lebanese-Arabic supplier note via the Tier-1 model.
 
@@ -121,7 +180,14 @@ async def _draft_note(ctx: ToolContext, product_name: str, quantity: int) -> str
     system = inventory_agent_ar.DRAFT_NOTE_SYSTEM.format(
         product_name=product_name, quantity=quantity
     )
-    messages = [SystemMessage(content=system)]
+    messages = [
+        SystemMessage(content=system),
+        HumanMessage(
+            content=inventory_agent_ar.DRAFT_NOTE_HUMAN.format(
+                product_name=product_name, quantity=quantity
+            )
+        ),
+    ]
 
     attempts = ctx.settings.llm_max_retries + 1
     for attempt in range(attempts):

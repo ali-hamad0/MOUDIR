@@ -9,8 +9,10 @@ import type {
   ChurnPredictions,
   DemandPredictions,
 } from "../api/types";
+import { useAuth } from "../auth/context";
 import { Button } from "../components/Button";
 import { AlertIcon } from "../components/icons";
+import { ProLockCard } from "../components/ProLock";
 import { formatDate, formatLbp } from "../format";
 import { t } from "../i18n";
 
@@ -28,12 +30,19 @@ interface Data {
 }
 
 export default function InsightsPage() {
+  const { me } = useAuth();
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
+  // Insights are Pro-only (plan_gate). For Free, skip the calls and show the lock.
+  const isPro = me?.effective_plan === "pro";
 
   useEffect(() => {
+    if (!isPro) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(false);
@@ -59,13 +68,15 @@ export default function InsightsPage() {
     return () => {
       cancelled = true;
     };
-  }, [reloadTick]);
+  }, [reloadTick, isPro]);
 
   return (
     <div className="flex flex-col gap-4">
       <h2 className="text-xl font-bold text-foreground">{t.insightsTitle}</h2>
 
-      {loading ? (
+      {!isPro ? (
+        <ProLockCard height={320} />
+      ) : loading ? (
         <Skeletons />
       ) : error || !data ? (
         <ErrorState onRetry={() => setReloadTick((n) => n + 1)} />

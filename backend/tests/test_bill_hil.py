@@ -163,10 +163,14 @@ async def _qty(db: AsyncSession, tenant_id: UUID, product_id: UUID) -> int | Non
     return row.quantity if row else None
 
 
-async def _audit_count(db: AsyncSession, action: str) -> int:
+async def _audit_count(db: AsyncSession, tenant_id: UUID, action: str) -> int:
+    # Tenant-scoped: the suite runs against the live dev database, so a global
+    # count would be polluted by real rows outside the test's rolled-back txn.
     return (
         await db.execute(
-            select(func.count()).select_from(AuditLog).where(AuditLog.action == action)
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.tenant_id == tenant_id, AuditLog.action == action)
         )
     ).scalar_one()
 
@@ -203,8 +207,8 @@ async def test_happy_path_commits_stock(db_session: AsyncSession) -> None:
     assert await _status(db_session, bill_id) == "committed"
 
     for action in ("bill.uploaded", "bill.extracted", "bill.approved", "bill.committed"):
-        assert await _audit_count(db_session, action) >= 1
-    assert await _audit_count(db_session, "bill.line_committed") == 2
+        assert await _audit_count(db_session, seed.tenant_id, action) >= 1
+    assert await _audit_count(db_session, seed.tenant_id, "bill.line_committed") == 2
 
 
 # ── 1. The gate holds: no stock without a valid token ────────────────────────
@@ -286,7 +290,7 @@ async def test_reject_provisions_no_stock(db_session: AsyncSession) -> None:
     assert detail.status == "rejected"
     assert await _qty(db_session, seed.tenant_id, seed.flour_id) == 5  # untouched
     assert await _qty(db_session, seed.tenant_id, seed.sugar_id) is None
-    assert await _audit_count(db_session, "bill.committed") == 0
+    assert await _audit_count(db_session, seed.tenant_id, "bill.committed") == 0
 
 
 # ── 4. No auto-commit: extracted bill never moved stock on its own ───────────

@@ -6,6 +6,7 @@ tenant. I/O is Pydantic-validated; bad LLM output in parse_order triggers a retr
 line against the live catalog (the final guard against a hallucinated product).
 """
 
+import json
 import re
 from dataclasses import dataclass
 from uuid import UUID
@@ -117,21 +118,34 @@ def _match_phrase_to_catalog(phrase: str, catalog: list[CatalogItem]) -> Catalog
     Strategy on normalized Arabic: exact equality, then containment either way,
     then word-overlap — lenient on spelling, strict on identity (بيتزا won't match
     كعك). Returns None if no available item matches.
+
+    Each tier is evaluated over the WHOLE catalog before falling to the next, and
+    ties prefer the most specific name — otherwise a shop selling both "كعك" and
+    "كعك بالسمسم" would hand a sesame-kaak order to plain kaak just because it
+    came first in the list.
     """
     p = _normalize_ar(phrase)
     if not p:
         return None
+    available = [(item, _normalize_ar(item.name_ar)) for item in catalog if item.is_available]
+    # Tier 1: exact equality.
+    for item, n in available:
+        if p == n:
+            return item
+    # Tier 2: containment either way; the longest (most specific) name wins.
+    contained = [(item, n) for item, n in available if p in n or n in p]
+    if contained:
+        return max(contained, key=lambda pair: len(pair[1]))[0]
+    # Tier 3: word overlap (handles "كعكات" plural vs "كعك", extra adjectives);
+    # the largest overlap wins, longer name breaks ties.
     p_words = set(p.split())
-    for item in catalog:
-        if not item.is_available:
-            continue
-        n = _normalize_ar(item.name_ar)
-        if p == n or p in n or n in p:
-            return item
-        # Word overlap (handles "كعكات" plural vs "كعك", extra adjectives).
-        if p_words & set(n.split()):
-            return item
-    return None
+    best: CatalogItem | None = None
+    best_key = (0, 0)
+    for item, n in available:
+        key = (len(p_words & set(n.split())), len(n))
+        if key[0] > 0 and key > best_key:
+            best, best_key = item, key
+    return best
 
 
 async def parse_order(
@@ -145,16 +159,22 @@ async def parse_order(
     real product for an unknown request. Returns None when nothing resolves or the
     LLM keeps failing after retries; the caller replies politely, never crashes.
     """
-    model = ctx.router.tier1().with_structured_output(RawOrder)
+    llm = ctx.router.tier1_json()
     system = order_agent_ar.PARSE_ORDER_SYSTEM.format(catalog=_render_catalog(catalog))
     messages = [SystemMessage(content=system), HumanMessage(content=text)]
 
     attempts = ctx.settings.llm_max_retries + 1
     for attempt in range(attempts):
         try:
-            raw: RawOrder = await model.ainvoke(messages)
-        except (ValidationError, ValueError) as e:
-            # Malformed structured output → retry, not crash.
+            response = await llm.ainvoke(messages)
+            raw_text = (response.content if hasattr(response, "content") else str(response)).strip()
+            # Strip markdown code fences (```json ... ``` or ``` ... ```)
+            fence_match = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw_text)
+            if fence_match:
+                raw_text = fence_match.group(1).strip()
+            raw: RawOrder = RawOrder.model_validate_json(raw_text)
+        except (ValidationError, ValueError, json.JSONDecodeError) as e:
+            # Malformed JSON or schema mismatch → retry, not crash.
             log.warning(
                 "tool.parse_order.invalid",
                 tenant_id=str(ctx.tenant_id),
@@ -164,8 +184,6 @@ async def parse_order(
             continue
         except Exception as e:
             # Provider / transport failure (auth, rate-limit, timeout, network).
-            # The flow must NEVER 500 on the customer — degrade to a polite reply.
-            # (Phase 8 hardening adds provider fallback in the router itself.)
             log.warning(
                 "tool.parse_order.llm_error",
                 tenant_id=str(ctx.tenant_id),

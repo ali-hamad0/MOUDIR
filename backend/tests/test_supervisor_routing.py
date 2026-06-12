@@ -76,6 +76,9 @@ def _build_supervisor(intent_result: str = "advisor"):
 
     order_agent = _make_mock_agent("رد order")
     inventory_agent = _make_mock_agent("رد inventory")
+    # The inventory node tries the stock-edit propose step first (Phase 10);
+    # None means "not an edit" → falls through to the read-only handle().
+    inventory_agent.propose_adjustment = AsyncMock(return_value=None)
     finance_agent = _make_mock_agent("رد finance")
     customer_agent = _make_mock_agent("رد customer")
     advisor_agent = _make_mock_agent("رد advisor")

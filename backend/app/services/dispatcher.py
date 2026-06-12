@@ -110,9 +110,14 @@ class MessageDispatcher:
             return
         try:
             async with self._sessionmaker() as session:
-                await CustomerEnrichmentService(session).enrich_from_message(
+                stated = await CustomerEnrichmentService(session).enrich_from_message(
                     tenant_id=identity.tenant.id, customer=identity.actor, text=text
                 )
+            if stated is not None:
+                # Enrichment wrote through its own session; sync the in-memory
+                # actor so the agent's name gate sees a name stated in THIS
+                # message ("اسمي سارة، بدي ٢ كعك" must confirm in one pass).
+                identity.actor.display_name = stated
         except Exception as e:  # enrichment is best-effort, not on the critical path
             log.warning(
                 "customer.enrich.failed",

@@ -69,6 +69,22 @@ class InventoryRepository(TenantScopedRepository[Inventory]):
         result = await self._session.execute(stmt)
         return result.rowcount == 1
 
+    async def set_quantity(self, tenant_id: UUID, product_id: UUID, qty: int) -> bool:
+        """Atomically SET a product's stock to an absolute quantity. Returns True
+        on success, False when no inventory row exists (caller ensures the row
+        first, like `increase`). One atomic statement, same discipline as
+        deduct/increase — used by the WhatsApp owner edit ("صار عندي ٥٠")."""
+        stmt = (
+            update(Inventory)
+            .where(
+                Inventory.tenant_id == tenant_id,
+                Inventory.product_id == product_id,
+            )
+            .values(quantity=qty)
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount == 1
+
     async def ensure_row(self, tenant_id: UUID, product_id: UUID) -> None:
         """Make sure an inventory row exists for this (tenant, product) at qty 0.
 
@@ -100,27 +116,30 @@ class InventoryRepository(TenantScopedRepository[Inventory]):
         )
         return (await self._session.execute(stmt)).scalars().all()
 
-    async def count(self, tenant_id: UUID) -> int:
-        """How many inventory rows this tenant has — the page total for the
-        dashboard view, computed in the same tenant scope as the listing."""
-        stmt = select(func.count()).select_from(Inventory).where(Inventory.tenant_id == tenant_id)
+    async def count_products(self, tenant_id: UUID) -> int:
+        """Count of this tenant's catalog — the correct page total for the
+        inventory dashboard which LEFT JOINs to show ALL products, not just
+        those that already have a tracked inventory row."""
+        stmt = select(func.count()).select_from(Product).where(Product.tenant_id == tenant_id)
         return int((await self._session.execute(stmt)).scalar_one())
 
     async def list_with_product(
         self, tenant_id: UUID, *, limit: int, offset: int
-    ) -> Sequence[Row[tuple[Inventory, Product]]]:
-        """One page of inventory joined to the catalog for the dashboard view.
+    ) -> Sequence[Row[tuple[Product, Inventory | None]]]:
+        """One page of the catalog LEFT JOINed to inventory for the dashboard.
 
-        The JOIN to products is scoped on BOTH sides by tenant_id (constitution I:
-        a cross-tenant JOIN is a Sev-1 leak). Newest-catalogued first.
+        Products with no inventory row yet appear with null inventory fields
+        (quantity defaults to 0 in the read model). Tenant-scoped on both
+        sides (constitution I: a cross-tenant JOIN is a Sev-1 leak).
+        Newest-catalogued first.
         """
         stmt = (
-            select(Inventory, Product)
-            .join(
-                Product,
-                (Product.id == Inventory.product_id) & (Product.tenant_id == Inventory.tenant_id),
+            select(Product, Inventory)
+            .outerjoin(
+                Inventory,
+                (Inventory.product_id == Product.id) & (Inventory.tenant_id == Product.tenant_id),
             )
-            .where(Inventory.tenant_id == tenant_id)
+            .where(Product.tenant_id == tenant_id)
             .order_by(Product.created_at.desc())
             .limit(limit)
             .offset(offset)

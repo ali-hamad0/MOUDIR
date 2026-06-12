@@ -98,3 +98,58 @@ def test_provider_sdk_is_confined_to_cloud_vision_module() -> None:
         if "google.cloud" in text or "from google.oauth2" in text:
             offenders.append(str(path.relative_to(app_dir)))
     assert offenders == [], f"GCP SDK leaked outside cloud_vision.py: {offenders}"
+
+
+def test_factory_builds_gemini_engine() -> None:
+    """ocr_mode="gemini" selects the Gemini engine (Phase 10) — built lazily,
+    no network at build time, keyed by the existing gemini_api_key."""
+    from app.infra.ocr.gemini_vision import GeminiOCREngine
+
+    engine = build_ocr_engine(
+        Settings.model_construct(ocr_mode="gemini", gemini_api_key=SecretStr("k"))
+    )
+    assert isinstance(engine, GeminiOCREngine)
+
+
+async def test_gemini_engine_parses_text_into_blocks(monkeypatch) -> None:
+    """The Gemini engine turns the API's text into an OCRResult with one block
+    per line at the documented fixed confidence (httpx mocked — offline)."""
+    import httpx
+
+    from app.infra.ocr.gemini_vision import _BLOCK_CONFIDENCE, GeminiOCREngine
+
+    payload = {
+        "candidates": [
+            {"content": {"parts": [{"text": "فاتورة رقم ١\nكنافة ٥ صحن\nالمجموع ٤٥٠٠٠٠"}]}}
+        ]
+    }
+
+    class _FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return payload
+
+    class _FakeClient:
+        def __init__(self, *a, **k): ...
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, json):
+            assert "generativelanguage" in url
+            return _FakeResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeClient)
+    engine = GeminiOCREngine(
+        Settings.model_construct(ocr_mode="gemini", gemini_api_key=SecretStr("k"))
+    )
+    result = await engine.extract(b"png-bytes")
+
+    assert result.engine == "gemini"
+    assert len(result.blocks) == 3
+    assert result.blocks[1].text == "كنافة ٥ صحن"
+    assert result.min_confidence == _BLOCK_CONFIDENCE

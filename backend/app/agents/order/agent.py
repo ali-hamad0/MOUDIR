@@ -1,6 +1,7 @@
 """OrderAgent — a LangGraph StateGraph wiring the three order tools.
 
-Flow:  load_catalog → parse → (None → "didn't understand" reply)
+Flow:  load_catalog → parse → (None → knowledge-base fallback / "didn't understand")
+                              → (order but customer name unknown → ask for the name)
                               → confirm → (domain error → "unavailable"/"not in
                                            catalog" reply)
                                         → success reply (Lebanese Arabic, LBP total)
@@ -32,6 +33,7 @@ from app.agents.order.tools import (
     parse_order,
     search_knowledge_base,
 )
+from app.db.models import Customer
 from app.domain.errors import ProductNotInCatalog, ProductUnavailable
 from app.domain.identity import ResolvedIdentity
 from app.infra.embeddings import EmbeddingClient
@@ -46,6 +48,7 @@ class _OrderState(TypedDict, total=False):
     text: str
     catalog: list[CatalogItem]
     parsed: ParsedOrder | None
+    needs_name: bool
     reply: str
 
 
@@ -72,11 +75,19 @@ async def _load_catalog(state: _OrderState, config: RunnableConfig) -> _OrderSta
 
 
 async def _parse(state: _OrderState, config: RunnableConfig) -> _OrderState:
-    parsed = await parse_order(_ctx_of(config), state["text"], state["catalog"])
+    ctx = _ctx_of(config)
+    parsed = await parse_order(ctx, state["text"], state["catalog"])
     # A None parse means the message isn't an order we could resolve. Don't reply
     # "didn't understand" yet — it might be a question (delivery zone, hours, policy);
     # route to the knowledge base first (Task 5.16).
-    return {"parsed": parsed}
+    #
+    # An order from a customer we have no name for is NOT confirmed: the dashboard
+    # must show who ordered. A name stated in the same message has already been
+    # applied by the dispatcher's enrichment pass, so this only fires when the
+    # name is genuinely unknown. Non-Customer actors (owner-driven tests) skip it.
+    actor = ctx.identity.actor
+    name_missing = isinstance(actor, Customer) and not (actor.display_name or "").strip()
+    return {"parsed": parsed, "needs_name": parsed is not None and name_missing}
 
 
 async def _search_kb(state: _OrderState, config: RunnableConfig) -> _OrderState:
@@ -86,6 +97,15 @@ async def _search_kb(state: _OrderState, config: RunnableConfig) -> _OrderState:
     chunks = await search_knowledge_base(ctx, state["text"])
     answer = await answer_from_knowledge(ctx, state["text"], chunks)
     return {"reply": answer or order_ar.DID_NOT_UNDERSTAND}
+
+
+async def _ask_name(state: _OrderState, config: RunnableConfig) -> _OrderState:
+    """The message is a valid order but the customer is anonymous — ask for the
+    name (with a resend example) instead of confirming. Stateless by design: the
+    customer resends name + order in one message and it confirms in one pass."""
+    ctx = _ctx_of(config)
+    log.info("order_agent.name_required", tenant_id=str(ctx.tenant_id))
+    return {"reply": order_ar.NAME_REQUIRED}
 
 
 async def _confirm(state: _OrderState, config: RunnableConfig) -> _OrderState:
@@ -99,23 +119,34 @@ async def _confirm(state: _OrderState, config: RunnableConfig) -> _OrderState:
     return {"reply": _success_reply(order.total_lbp, order.fulfillment_type)}
 
 
+def _route_after_parse(state: _OrderState) -> str:
+    if state.get("parsed") is None:
+        return "search_kb"
+    if state.get("needs_name"):
+        return "ask_name"
+    return "confirm"
+
+
 def _build_graph():
     graph: StateGraph = StateGraph(_OrderState)
     graph.add_node("load_catalog", _load_catalog)
     graph.add_node("parse", _parse)
     graph.add_node("confirm", _confirm)
+    graph.add_node("ask_name", _ask_name)
     graph.add_node("search_kb", _search_kb)
 
     graph.add_edge(START, "load_catalog")
     graph.add_edge("load_catalog", "parse")
-    # An order routes to confirm; a non-order routes to the knowledge base (which
+    # An order from a named customer routes to confirm; an order from an anonymous
+    # customer routes to ask_name; a non-order routes to the knowledge base (which
     # answers a question from RAG, or falls back to "didn't understand").
     graph.add_conditional_edges(
         "parse",
-        lambda state: "confirm" if state.get("parsed") is not None else "search_kb",
-        {"confirm": "confirm", "search_kb": "search_kb"},
+        _route_after_parse,
+        {"confirm": "confirm", "ask_name": "ask_name", "search_kb": "search_kb"},
     )
     graph.add_edge("confirm", END)
+    graph.add_edge("ask_name", END)
     graph.add_edge("search_kb", END)
     return graph.compile()
 

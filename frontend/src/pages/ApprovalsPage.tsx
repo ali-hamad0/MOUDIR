@@ -8,6 +8,7 @@ import {
   type SignupRequestAdminView,
 } from "../api/admin";
 import { ApiError } from "../api/client";
+import { AdminTabs } from "../components/AdminTabs";
 import { Button } from "../components/Button";
 import { Field } from "../components/Field";
 import { formatDate } from "../format";
@@ -67,6 +68,8 @@ export default function ApprovalsPage() {
             {t.logout}
           </button>
         </header>
+
+        <AdminTabs active="approvals" />
 
         {error ? (
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-8 text-center">

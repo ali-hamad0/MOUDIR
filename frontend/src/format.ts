@@ -43,3 +43,12 @@ export function formatDate(iso: string | null | undefined): string {
     timeZone: "Asia/Beirut",
   });
 }
+
+/** Normalize a phone number for submission: keep digits and a single leading
+ * "+", dropping spaces, dashes, and invisible bidi marks (U+200E etc.) that
+ * come along when a number is copied out of WhatsApp or the Meta dashboard —
+ * those survive .trim() and silently break the backend's exact-match lookup. */
+export function sanitizePhone(raw: string): string {
+  const digits = raw.replace(/[^\d]/g, "");
+  return raw.includes("+") ? `+${digits}` : digits;
+}

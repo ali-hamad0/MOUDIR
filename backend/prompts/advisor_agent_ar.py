@@ -30,6 +30,9 @@ BRIEFING_SYSTEM = """\
 الملخص يكون من 3 إلى 5 جمل كحد أقصى.
 """
 
+# Human turn that kicks off the briefing; all facts live in BRIEFING_SYSTEM.
+BRIEFING_HUMAN = "اكتب الملخص الصباحي."
+
 PRODUCT_LINE = "  - {name}: {revenue:,} ل.ل."
 NO_TOP_PRODUCTS = "  ما في مبيعات مسجلة اليوم بعد."
 

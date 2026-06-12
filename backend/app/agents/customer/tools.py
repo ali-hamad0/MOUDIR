@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from uuid import UUID
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -123,7 +123,10 @@ async def draft_reengagement(ctx: ToolContext, customer: CustomerRisk) -> str:
         last_order_info=last_order_info,
     )
     model = ctx.router.tier1().with_structured_output(DraftMessage)
-    messages = [SystemMessage(content=system)]
+    messages = [
+        SystemMessage(content=system),
+        HumanMessage(content=customer_agent_ar.DRAFT_HUMAN),
+    ]
 
     attempts = ctx.settings.llm_max_retries + 1
     for attempt in range(attempts):

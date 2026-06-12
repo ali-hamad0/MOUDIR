@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from uuid import UUID
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -166,7 +166,7 @@ async def compose_reply(
         anomaly_section=anomaly_section,
     )
     model = ctx.router.tier1().with_structured_output(FinanceReply)
-    messages = [SystemMessage(content=system)]
+    messages = [SystemMessage(content=system), HumanMessage(content=question)]
 
     attempts = ctx.settings.llm_max_retries + 1
     for attempt in range(attempts):

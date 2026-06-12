@@ -33,3 +33,23 @@ PO_INVALID_TRANSITION = "ما فينا نعمل هالعملية على طلب �
 
 # Rejecting a draft PO requires a reason (enforced at the schema + the service).
 PO_REJECT_REASON_REQUIRED = "لازم تكتب سبب الرفض."
+
+# ── WhatsApp stock edits (Phase 10) ──────────────────────────────────────────
+
+# A stock edit parsed; ask the owner to confirm before anything is written.
+# {product_name}, {old} (current quantity), {new} (quantity after the edit).
+ADJUST_CONFIRM = (
+    "بدك عدّل مخزون «{product_name}» من {old} لـ {new}؟ ردّ «نعم» للتأكيد أو «لا» للإلغاء."
+)
+
+# The confirmed edit was applied. {product_name}, {new} = the final quantity.
+ADJUST_APPLIED = "تم! مخزون «{product_name}» صار {new}. ✅"
+
+# The owner replied «لا» — nothing was written.
+ADJUST_CANCELLED = "ولا شي، ما غيّرت المخزون. 👍"
+
+# The edit named a product that doesn't match anything in THIS shop's catalog.
+ADJUST_PRODUCT_NOT_FOUND = "ما لقيت «{phrase}» بمنتجاتك. تأكّد من الاسم وجرّب مرة تانية."
+
+# A subtract larger than the current stock — nothing was written.
+ADJUST_INSUFFICIENT = "ما فيك تنزّل {amount} — مخزون «{product_name}» الحالي {old} بس."

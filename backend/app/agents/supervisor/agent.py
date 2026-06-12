@@ -6,6 +6,8 @@ restart.
 
 Architecture (AD-7.3):
   START → route → [conditional on intent] → one of 5 agent nodes → respond → END
+                  (or, with a pending stock edit + a clear «نعم/لا» →
+                   apply_adjustment / cancel_adjustment → respond — Phase 10)
 
 The route node calls classify_intent (Tier-1 LLM) and sets state["intent"].
 Each agent node calls the specialist's handle() — those agents own their own
@@ -37,11 +39,11 @@ from app.agents.finance.agent import FinanceAgent
 from app.agents.inventory.agent import InventoryAgent
 from app.agents.llm.cost_callback import CostTrackingCallback
 from app.agents.llm.router import LLMRouter
-from app.agents.supervisor.routing import classify_intent
+from app.agents.supervisor.routing import classify_intent, parse_confirmation
 from app.agents.supervisor.state import SupervisorState
 from app.infra.checkpointer import make_thread_id
 from app.infra.logging import get_logger
-from prompts import supervisor_ar
+from prompts import inventory_ar, supervisor_ar
 
 log = get_logger(__name__)
 
@@ -87,6 +89,28 @@ class OwnerSupervisor:
         # mutable state lives on the supervisor instance.
 
         async def _route(state: SupervisorState, config: RunnableConfig) -> SupervisorState:
+            # A pending stock edit intercepts the turn BEFORE intent classification:
+            # a clear «نعم/لا» resolves it deterministically (no LLM may decide a
+            # write); anything else drops the stale proposal and routes normally.
+            if state.get("pending_adjustment"):
+                decision = parse_confirmation(state["message"])
+                if decision is not None:
+                    node = "apply_adjustment" if decision == "yes" else "cancel_adjustment"
+                    log.info(
+                        "supervisor.adjust_confirmation",
+                        tenant_id=state.get("tenant_id"),
+                        decision=decision,
+                    )
+                    return {"intent": node, "routed_to": "inventory"}
+                intent = await classify_intent(state["message"], self._router.tier1())
+                log.info(
+                    "supervisor.routed",
+                    tenant_id=state.get("tenant_id"),
+                    intent=intent,
+                    dropped_pending_adjustment=True,
+                )
+                return {"intent": intent, "routed_to": intent, "pending_adjustment": None}
+
             intent = await classify_intent(state["message"], self._router.tier1())
             log.info(
                 "supervisor.routed",
@@ -106,8 +130,30 @@ class OwnerSupervisor:
         async def _inventory_node(
             state: SupervisorState, config: RunnableConfig
         ) -> SupervisorState:
+            # A stock-edit message proposes (never writes) and parks the pending
+            # dict in checkpointed state for the «نعم/لا» turn; anything else is
+            # the read-only status path.
+            proposal = await self._inventory_agent.propose_adjustment(
+                state["message"], UUID(state["tenant_id"])
+            )
+            if proposal is not None:
+                reply, pending = proposal
+                return {"response": reply, "pending_adjustment": pending}
             reply = await self._inventory_agent.handle(state["message"], UUID(state["tenant_id"]))
             return {"response": reply}
+
+        async def _apply_adjustment_node(
+            state: SupervisorState, config: RunnableConfig
+        ) -> SupervisorState:
+            reply = await self._inventory_agent.apply_adjustment(
+                UUID(state["tenant_id"]), state["pending_adjustment"]
+            )
+            return {"response": reply, "pending_adjustment": None}
+
+        async def _cancel_adjustment_node(
+            state: SupervisorState, config: RunnableConfig
+        ) -> SupervisorState:
+            return {"response": inventory_ar.ADJUST_CANCELLED, "pending_adjustment": None}
 
         async def _finance_node(state: SupervisorState, config: RunnableConfig) -> SupervisorState:
             reply = await self._finance_agent.handle(state["message"], UUID(state["tenant_id"]))
@@ -136,15 +182,18 @@ class OwnerSupervisor:
         graph.add_node("finance", _finance_node)
         graph.add_node("customer", _customer_node)
         graph.add_node("advisor", _advisor_node)
+        graph.add_node("apply_adjustment", _apply_adjustment_node)
+        graph.add_node("cancel_adjustment", _cancel_adjustment_node)
         graph.add_node("respond", _respond)
 
+        confirmation_nodes = ("apply_adjustment", "cancel_adjustment")
         graph.add_edge(START, "route")
         graph.add_conditional_edges(
             "route",
             lambda state: state.get("intent", "advisor"),
-            {name: name for name in _INTENT_NODES},
+            {name: name for name in (*_INTENT_NODES, *confirmation_nodes)},
         )
-        for name in _INTENT_NODES:
+        for name in (*_INTENT_NODES, *confirmation_nodes):
             graph.add_edge(name, "respond")
         graph.add_edge("respond", END)
 

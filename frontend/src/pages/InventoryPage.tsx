@@ -2,13 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ApiError } from "../api/client";
 import { inventoryApi } from "../api/inventory";
+import { profileApi } from "../api/profile";
 import type {
   InventoryPage as Page,
   InventoryRead,
+  ProductWrite,
   SupplierRead,
 } from "../api/types";
 import { Button } from "../components/Button";
 import { Field } from "../components/Field";
+import { ProLimitNotice } from "../components/ProLock";
+import { Toggle } from "../components/Toggle";
 import { AlertIcon } from "../components/icons";
 import { t } from "../i18n";
 
@@ -23,6 +27,7 @@ export default function InventoryPage() {
   const [reloadTick, setReloadTick] = useState(0);
   // The product currently being edited (null = no modal open).
   const [editing, setEditing] = useState<InventoryRead | null>(null);
+  const [addingProduct, setAddingProduct] = useState(false);
 
   // Suppliers are a small per-tenant list; load once for name lookup + the edit
   // dropdown. A failure here is non-fatal — the page still renders without it.
@@ -86,7 +91,12 @@ export default function InventoryPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-xl font-bold text-foreground">{t.inventoryTitle}</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-xl font-bold text-foreground">{t.inventoryTitle}</h2>
+        <Button type="button" onClick={() => setAddingProduct(true)}>
+          {t.addProduct}
+        </Button>
+      </div>
 
       {loading ? (
         <Skeletons />
@@ -163,6 +173,16 @@ export default function InventoryPage() {
           suppliers={suppliers}
           onClose={() => setEditing(null)}
           onSaved={onSaved}
+        />
+      )}
+
+      {addingProduct && (
+        <AddProductModal
+          onClose={() => setAddingProduct(false)}
+          onCreated={() => {
+            setAddingProduct(false);
+            reload();
+          }}
         />
       )}
     </div>
@@ -320,7 +340,7 @@ function EditModal({
       onClick={onClose}
     >
       <div
-        className="flex w-full max-w-md flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-xl"
+        className="flex max-h-[90dvh] w-full max-w-md flex-col gap-4 overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-lg font-bold text-foreground">
@@ -408,6 +428,183 @@ function EditModal({
           </button>
           <Button onClick={save} loading={busy}>
             {busy ? t.saving : t.save}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- Add product modal ----
+
+// Creating a product here (not in the profile page) keeps catalog + stock in
+// one place. The backend seeds an inventory row at qty 0 on create, so the new
+// product shows up in the list immediately; an optional initial quantity is
+// applied right after with the regular upsert.
+function AddProductModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [draft, setDraft] = useState({
+    name_ar: "",
+    name_en: "",
+    price_lbp: "",
+    price_usd: "",
+    unit: "",
+    category: "",
+    is_available: true,
+    quantity: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  async function create() {
+    if (!draft.name_ar.trim()) return;
+    setBusy(true);
+    setFormError(null);
+    try {
+      const created = await profileApi.createProduct({
+        name_ar: draft.name_ar.trim(),
+        name_en: draft.name_en.trim() || null,
+        unit: draft.unit.trim() || null,
+        category: draft.category.trim() || null,
+        price_lbp: draft.price_lbp ? Number(draft.price_lbp) : null,
+        price_usd: draft.price_usd || null,
+        is_available: draft.is_available,
+      } as ProductWrite);
+
+      // Non-fatal: the product exists either way; stock can be set from the list.
+      if (draft.quantity.trim() && Number(draft.quantity) > 0) {
+        await inventoryApi
+          .upsert(created.id, {
+            quantity: Number(draft.quantity),
+            reorder_threshold: null,
+            reorder_quantity: null,
+            supplier_id: null,
+          })
+          .catch(() => {});
+      }
+      onCreated();
+    } catch (err) {
+      // 402 = the Free catalog cap (plan_gate) — show the upgrade nudge.
+      setFormError(
+        err instanceof ApiError && err.status === 402
+          ? "limit:products"
+          : err instanceof ApiError && err.status === 0
+            ? t.networkError
+            : t.errorGeneric,
+      );
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-40 flex items-end justify-center bg-foreground/40 p-4 sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label={t.addProduct}
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[90dvh] w-full max-w-md flex-col gap-4 overflow-y-auto rounded-2xl border border-border bg-card p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-bold text-foreground">{t.addProduct}</h3>
+
+        <Field
+          name="name_ar"
+          label={t.productNameAr}
+          value={draft.name_ar}
+          onChange={(e) => setDraft({ ...draft, name_ar: e.target.value })}
+          disabled={busy}
+        />
+        <Field
+          name="name_en"
+          label={`${t.productNameEn} (${t.optional})`}
+          value={draft.name_en}
+          onChange={(e) => setDraft({ ...draft, name_en: e.target.value })}
+          disabled={busy}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <Field
+            name="unit"
+            label={`${t.unit} (${t.optional})`}
+            placeholder="حبة، كيلو، ربطة..."
+            value={draft.unit}
+            onChange={(e) => setDraft({ ...draft, unit: e.target.value })}
+            disabled={busy}
+          />
+          <Field
+            name="category"
+            label={`${t.category} (${t.optional})`}
+            placeholder="مخبوزات، حلويات..."
+            value={draft.category}
+            onChange={(e) => setDraft({ ...draft, category: e.target.value })}
+            disabled={busy}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field
+            name="price_lbp"
+            label={t.priceLbp}
+            type="number"
+            inputMode="numeric"
+            min={0}
+            value={draft.price_lbp}
+            onChange={(e) => setDraft({ ...draft, price_lbp: e.target.value })}
+            disabled={busy}
+          />
+          <Field
+            name="price_usd"
+            label={t.priceUsd}
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="0.01"
+            value={draft.price_usd}
+            onChange={(e) => setDraft({ ...draft, price_usd: e.target.value })}
+            disabled={busy}
+          />
+        </div>
+        <Field
+          name="quantity"
+          label={t.initialStock}
+          type="number"
+          inputMode="numeric"
+          min={0}
+          value={draft.quantity}
+          onChange={(e) => setDraft({ ...draft, quantity: e.target.value })}
+          disabled={busy}
+        />
+        <Toggle
+          label={t.isAvailable}
+          checked={draft.is_available}
+          onChange={(v) => setDraft({ ...draft, is_available: v })}
+        />
+
+        {formError === "limit:products" ? (
+          <ProLimitNotice message={t.limitProductsMsg} />
+        ) : formError ? (
+          <p role="alert" className="text-sm text-destructive">
+            {formError}
+          </p>
+        ) : null}
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="min-h-[44px] rounded-lg px-4 text-sm font-medium text-muted-foreground hover:text-foreground disabled:opacity-50"
+          >
+            {t.cancel}
+          </button>
+          <Button onClick={create} loading={busy} disabled={!draft.name_ar.trim()}>
+            {busy ? t.addingProduct : t.addProduct}
           </Button>
         </div>
       </div>

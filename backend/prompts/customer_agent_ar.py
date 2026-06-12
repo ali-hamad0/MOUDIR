@@ -27,6 +27,9 @@ DRAFT_SYSTEM = """\
 {last_order_info}
 """
 
+# Human turn that kicks off the draft; the customer facts live in DRAFT_SYSTEM.
+DRAFT_HUMAN = "اكتب رسالة إعادة تواصل."
+
 # Deterministic fallback when the LLM draft fails after all retries.
 FALLBACK_DRAFT = "مرحبا {customer_name}، مشتاقين لك! كيف قدرنا نساعدك اليوم؟"
 

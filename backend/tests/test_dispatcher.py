@@ -108,3 +108,24 @@ async def test_input_rail_blocks_and_audits_without_running_agent(db_session: As
         )
     ).scalar()
     assert tripped == 1
+
+
+async def test_stated_name_syncs_in_memory_actor_before_agent_runs(db_session: AsyncSession):
+    """A name stated in the same message as the order must be visible to the
+    agent's name gate: enrichment writes through its own session, and the
+    dispatcher syncs identity.actor.display_name before calling the agent."""
+    ta = Tenant(name="A", whatsapp_number="+961DISPN")
+    db_session.add(ta)
+    await db_session.flush()
+    cust = Customer(tenant_id=ta.id, phone_number="+96170DISPN")  # nameless
+    db_session.add(cust)
+    await db_session.flush()
+    identity = ResolvedIdentity(tenant=ta, role="customer", actor=cust)
+
+    spy = _SpyAgent()
+    await MessageDispatcher(spy, _sessionmaker_for(db_session)).dispatch(
+        "اسمي سارة بدي ٢ كعك", identity
+    )
+
+    assert spy.called_with is not None  # agent ran
+    assert identity.actor.display_name == "سارة"
