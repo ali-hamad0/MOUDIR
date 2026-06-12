@@ -63,8 +63,8 @@ const ar = {
   chatSessionsTitle: "المحادثات",
   chatUntitled: "محادثة بلا عنوان",
   chatHistoryError: "ما قدرنا نجيب المحادثات. جرّب مرة تانية.",
-  chatRecord: "🎙️ احكي",
-  chatRecordStop: "⏹ وقّف وابعت",
+  chatRecord: "احكي",
+  chatRecordStop: "وقّف وابعت",
   chatMicError: "ما قدرنا نوصل للمايكروفون. تأكّد من الإذن بالمتصفح.",
   chatVoiceError: "ما قدرنا نبعت الرسالة الصوتية. جرّب مرة تانية.",
   // Agent routing badge on each Modir chat bubble
@@ -560,8 +560,8 @@ const en: Record<TranslationKey, string> = {
   chatSessionsTitle: "Chats",
   chatUntitled: "Untitled chat",
   chatHistoryError: "Couldn't load your chats. Try again.",
-  chatRecord: "🎙️ Talk",
-  chatRecordStop: "⏹ Stop & send",
+  chatRecord: "Talk",
+  chatRecordStop: "Stop & send",
   chatMicError: "Couldn't access the microphone. Check the browser permission.",
   chatVoiceError: "Couldn't send the voice message. Try again.",
   // Agent routing badge on each Modir chat bubble
