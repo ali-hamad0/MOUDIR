@@ -5,11 +5,13 @@ from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
+    Identity,
     Index,
     Integer,
     Numeric,
@@ -60,6 +62,72 @@ class Tenant(Base):
     # models trained on synthetic data must be able to say so, and anything that must
     # be real can exclude synthetic tenants. Nullable so it never burdens real signup.
     data_source: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Billing (manual subscriptions — Lebanon reality: Whish/OMT/cash paid
+    # out-of-band, recorded by the founder). "trialing" until the first payment,
+    # "active" after. Expiry/past-due is DERIVED from current_period_end at read
+    # time; no scheduler in v1 — the founder suspends from the admin dashboard.
+    subscription_status: Mapped[str] = mapped_column(String(16), nullable=False, default="trialing")
+    current_period_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+
+class SubscriptionPayment(Base):
+    """One recorded subscription payment (Whish / OMT / cash / card transfer).
+
+    v1 billing has no payment gateway: the owner pays the founder out-of-band,
+    the founder records it here, and the tenant's current_period_end extends.
+    plan_tier and period_end_after are snapshots at recording time so the row
+    stays meaningful if the tenant's plan changes later. The Wall: tenant_id is
+    non-nullable and indexed.
+    """
+
+    __tablename__ = "subscription_payments"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    amount_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    # "whish" | "omt" | "cash" | "card" | "other" — validated in the service.
+    method: Mapped[str] = mapped_column(String(16), nullable=False)
+    months: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    plan_tier: Mapped[str] = mapped_column(String(32), nullable=False)
+    period_end_after: Mapped[date] = mapped_column(Date, nullable=False)
+    # NULL for gateway (Whish) payments — those are recorded by the system after
+    # server-side verification, not by a founder.
+    recorded_by: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("admins.id"), nullable=True
+    )
+
+
+class BillingCheckout(Base):
+    """One online checkout attempt through the Whish Pay collect API.
+
+    The owner starts a checkout (pending), pays on the Whish-hosted collect
+    page (card or wallet balance), and the dashboard's result page polls our
+    status endpoint — which verifies with Whish SERVER-SIDE (channel+secret)
+    before activating. Redirect/callback parameters are never trusted on their
+    own, so a forged redirect can't grant Pro. The Wall: tenant_id non-null +
+    indexed; a checkout can only ever activate its own tenant.
+    """
+
+    __tablename__ = "billing_checkouts"
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    months: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    amount_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    # The id Whish tracks the collect by (their spec uses a numeric externalId).
+    external_id: Mapped[int] = mapped_column(BigInteger, nullable=False, unique=True, index=True)
+    # "pending" | "paid" | "failed"
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    collect_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class TenantOwner(Base):
@@ -796,3 +864,54 @@ class AgentRun(Base):
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cost_usd: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False, default=Decimal("0"))
+
+
+# ── Phase 10 — Owner chat sessions ──────────────────────────────────────────
+
+
+class ChatSession(Base):
+    """One owner dashboard conversation (Phase 10 chat history).
+
+    Each session is its own LangGraph thread (thread_id is formed from
+    tenant_id + this row's id), so supervisor state — including a pending
+    stock-edit confirmation — is scoped per conversation. The Wall:
+    tenant_id is non-nullable and every repository read filters by it.
+    """
+
+    __tablename__ = "chat_sessions"
+    __table_args__ = (Index("ix_chat_sessions_tenant_updated", "tenant_id", "updated_at"),)
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    # The dashboard user who owns this conversation (sessions are per-user,
+    # not shared across a tenant's users).
+    user_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    # First owner message, truncated — the sidebar label.
+    title: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+
+class ChatMessage(Base):
+    """One bubble in an owner chat session — the owner's text or Modir's reply.
+
+    `agent` records which specialist handled a Modir turn (the badge in the UI);
+    null on owner messages.
+    """
+
+    __tablename__ = "chat_messages"
+    __table_args__ = (Index("ix_chat_messages_tenant_session", "tenant_id", "session_id"),)
+
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    session_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    # Strict insertion order for rendering. created_at can't do this: Postgres
+    # now() is transaction-constant, so two bubbles in one request would tie.
+    seq: Mapped[int] = mapped_column(BigInteger, Identity(always=True), nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)  # "owner" | "modir"
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    agent: Mapped[str | None] = mapped_column(String(32), nullable=True)

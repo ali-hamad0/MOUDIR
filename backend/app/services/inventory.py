@@ -48,10 +48,11 @@ class InventoryService:
     # ---- Inventory ----
     async def list_inventory(
         self, *, tenant_id: UUID, limit: int, offset: int
-    ) -> tuple[int, Sequence[Row[tuple[Inventory, Product]]]]:
-        """One page of inventory joined to the catalog plus the total count, both
-        in the caller's tenant scope."""
-        total = await self._inventory.count(tenant_id)
+    ) -> tuple[int, Sequence[Row[tuple[Product, Inventory | None]]]]:
+        """One page of ALL catalog products LEFT JOINed to inventory rows, plus
+        the total product count, both in the caller's tenant scope. Products
+        without an inventory row still appear (quantity shown as 0)."""
+        total = await self._inventory.count_products(tenant_id)
         rows = await self._inventory.list_with_product(tenant_id, limit=limit, offset=offset)
         return total, rows
 

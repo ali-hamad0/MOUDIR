@@ -72,6 +72,11 @@ def resolve_secrets(settings):
     optional_secrets_map = {
         "grok_api_key": ("modir/llm", "grok_api_key"),
         "anthropic_api_key": ("modir/llm", "anthropic_api_key"),
+        # Whish Pay merchant credentials (Phase 11). Optional: absent means the
+        # checkout runs in dev (simulated) mode; required in practice once
+        # WHISH_PAY_MODE=live.
+        "whish_pay_channel": ("modir/whish", "channel"),
+        "whish_pay_secret": ("modir/whish", "secret"),
     }
     resolved_optional = 0
     for field, (path, key) in optional_secrets_map.items():

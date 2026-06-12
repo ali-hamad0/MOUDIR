@@ -8,6 +8,7 @@ writes land in the rolled-back transaction.
 
 from contextlib import asynccontextmanager
 from decimal import Decimal
+from types import SimpleNamespace
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,12 +40,21 @@ class _FakeModel:
     def with_structured_output(self, schema):
         return self._s
 
+    async def ainvoke(self, messages):
+        # tier1_json path: parse_order reads raw JSON text off .content, so the
+        # scripted RawOrder is serialized the way the real model would emit it.
+        outcome = await self._s.ainvoke(messages)
+        return SimpleNamespace(content=outcome.model_dump_json())
+
 
 class _FakeRouter:
     def __init__(self, structured):
         self._m = _FakeModel(structured)
 
     def tier1(self):
+        return self._m
+
+    def tier1_json(self):
         return self._m
 
     def tier2(self):
@@ -78,7 +88,9 @@ async def _seed(db: AsyncSession):
     ta = Tenant(name="A", whatsapp_number="+961AGENTA")
     db.add(ta)
     await db.flush()
-    cust = Customer(tenant_id=ta.id, phone_number="+96170AGENT")
+    # Named: orders from a known customer confirm directly. The nameless-customer
+    # gate (ask for the name before confirming) is exercised in its own tests below.
+    cust = Customer(tenant_id=ta.id, phone_number="+96170AGENT", display_name="ربيع")
     avail = Product(
         tenant_id=ta.id, name_ar="كعك", price_lbp=1000, price_usd=Decimal("0.50"), is_available=True
     )
@@ -161,3 +173,44 @@ async def test_parse_failure_replies_gracefully(db_session: AsyncSession):
     )
     reply = await agent.handle("؟؟؟", _identity(ta, cust))
     assert reply == order_ar.DID_NOT_UNDERSTAND
+
+
+async def test_order_from_nameless_customer_asks_for_name_without_writing(
+    db_session: AsyncSession,
+):
+    """A valid order from a customer we have no name for is NOT confirmed — the
+    agent asks for the name (resend example) and no order row is written."""
+    ta, _named, avail, _u = await _seed(db_session)
+    anon = Customer(tenant_id=ta.id, phone_number="+96170ANON")
+    db_session.add(anon)
+    await db_session.flush()
+
+    good = RawOrder(items=[RawOrderItem(product_phrase="كعك", quantity=2)])
+    agent = _agent(db_session, _FakeRouter(_FakeStructured([good])))
+    reply = await agent.handle("بدي ٢ كعك", _identity(ta, anon))
+
+    assert reply == order_ar.NAME_REQUIRED
+    count = (
+        await db_session.execute(
+            select(func.count()).select_from(Order).where(Order.tenant_id == ta.id)
+        )
+    ).scalar()
+    assert count == 0
+
+
+async def test_question_from_nameless_customer_is_not_blocked_by_name_gate(
+    db_session: AsyncSession,
+):
+    """The name gate applies to ORDERS only — a nameless customer asking a
+    question still gets the knowledge-base path, not a demand for their name."""
+    ta, _named, _a, _u = await _seed(db_session)
+    anon = Customer(tenant_id=ta.id, phone_number="+96170ANONQ")
+    db_session.add(anon)
+    await db_session.flush()
+
+    non_order = RawOrder(items=[])  # parse → no items → not an order
+    agent = _agent(db_session, _FakeRouter(_FakeStructured([non_order])))
+    reply = await agent.handle("شو أوقات الفتح؟", _identity(ta, anon))
+
+    assert reply == order_ar.DID_NOT_UNDERSTAND  # no RAG wired in this test
+    assert reply != order_ar.NAME_REQUIRED

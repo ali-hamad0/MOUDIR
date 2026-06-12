@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import select
@@ -11,6 +12,8 @@ class TenantRepository:
 
     Lookups here are deliberately NOT tenant-scoped (there is no outer scope),
     but they are narrow: by id, or by the destination whatsapp_number.
+    list_all() is the one above-tenant read — founder directory only, reachable
+    exclusively behind get_current_admin, and every call is logged.
     """
 
     def __init__(self, session: AsyncSession) -> None:
@@ -19,6 +22,10 @@ class TenantRepository:
     async def get_by_id(self, id_: UUID) -> Tenant | None:
         result = await self._session.execute(select(Tenant).where(Tenant.id == id_))
         return result.scalar_one_or_none()
+
+    async def list_all(self) -> Sequence[Tenant]:
+        result = await self._session.execute(select(Tenant).order_by(Tenant.created_at.desc()))
+        return result.scalars().all()
 
     async def get_by_whatsapp_number(self, number: str) -> Tenant | None:
         result = await self._session.execute(select(Tenant).where(Tenant.whatsapp_number == number))

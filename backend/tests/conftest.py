@@ -1,9 +1,23 @@
+import asyncio
 import os
+import sys
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from uuid import UUID
 
+import pytest
 import pytest_asyncio
+
+if sys.platform == "win32":
+
+    @pytest.fixture(scope="session")
+    def event_loop_policy():
+        # psycopg async (LangGraph checkpointer pool) cannot run on Windows'
+        # default ProactorEventLoop — it hangs until PoolTimeout. Use the
+        # selector loop for the whole suite; asyncpg works on both.
+        return asyncio.WindowsSelectorEventLoopPolicy()
+
+
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.db.models import (

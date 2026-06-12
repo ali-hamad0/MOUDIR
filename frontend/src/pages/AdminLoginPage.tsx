@@ -22,7 +22,8 @@ export default function AdminLoginPage() {
     try {
       const res = await adminApi.login(email.trim(), password);
       setAdminToken(res.access_token);
-      navigate("/admin", { replace: true });
+      // Land on the platform overview — the founder's home base.
+      navigate("/admin/overview", { replace: true });
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 0

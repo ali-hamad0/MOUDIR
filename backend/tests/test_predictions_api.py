@@ -14,7 +14,7 @@ real User, and a stand-in `request` whose `app.state` carries the predictors —
 lifespan injects them, without spinning up the ASGI app.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -23,11 +23,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.predictions import predict_anomaly, predict_churn, predict_demand
 from app.db.models import Customer, Order, OrderItem, User
 from app.ml.predictors import StubAnomalyDetector, StubChurnPredictor, StubDemandPredictor
+from app.repositories.tenants import TenantRepository
 from app.repositories.users import UserRepository
 from tests.conftest import TwoTenants
 
 
 async def _user(db: AsyncSession, tenant_id, email) -> User:
+    """The calling user — with their tenant upgraded to Pro, since insights are
+    Pro-gated (Phase 11). These tests prove isolation + predictor plumbing; the
+    gate itself is proven in test_plan_gate.py."""
+    tenant = await TenantRepository(db).get_by_id(tenant_id)
+    assert tenant is not None
+    tenant.plan_tier = "pro"
+    tenant.subscription_status = "active"
+    tenant.current_period_end = date.today() + timedelta(days=30)
+
     user = await UserRepository(db).get_by_email(tenant_id, email)
     assert user is not None
     return user

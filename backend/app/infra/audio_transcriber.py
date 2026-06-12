@@ -31,7 +31,8 @@ _GEMINI_GENERATE_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
     "{model}:generateContent?key={api_key}"
 )
-_TRANSCRIPTION_MODEL = "gemini-1.5-flash"
+# gemini-1.5-flash was retired from the v1beta API (404s since late 2025).
+_TRANSCRIPTION_MODEL = "gemini-2.5-flash"
 
 
 class AudioTranscriber:

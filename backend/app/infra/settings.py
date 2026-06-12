@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     # resolve from Vault (modir/minio). The bucket holds bill images under
     # tenant-prefixed keys (the Wall for object storage — see app/infra/storage.py).
     minio_endpoint: str = Field(default="minio:9000")
+    # The endpoint BROWSERS use for presigned URLs (e.g. "localhost:9000" in dev —
+    # "minio:9000" only resolves inside the compose network). Presigned URLs are
+    # signature-bound to the host, so the URL must be SIGNED for this endpoint,
+    # not rewritten after. Empty → fall back to minio_endpoint (in-network use).
+    minio_public_endpoint: str = Field(default="")
     minio_access_key: SecretStr = Field(default=SecretStr("changeme"))
     minio_secret_key: SecretStr = Field(default=SecretStr("changeme"))
     minio_bucket: str = Field(default="modir-bills")
@@ -46,12 +51,47 @@ class Settings(BaseSettings):
     # TTL for the presigned image URL the review screen uses (Task 5.12).
     bill_image_url_ttl_minutes: int = Field(default=15)
 
+    # Billing (Phase 11, manual subscriptions). Non-secret config: how owners pay
+    # the founder out-of-band. billing_whish_link is a static Whish Money pay
+    # link/QR URL (the simplest real payment rail in Lebanon — no API needed);
+    # billing_contact_phone is the founder's WhatsApp for renewals/upgrades.
+    # Both optional: empty → the dashboard hides the corresponding action. A
+    # gateway API (Whish for Business / a card processor) plugs in later behind
+    # this same config seam without touching application code.
+    billing_whish_link: str = Field(default="")
+    billing_contact_phone: str = Field(default="")
+
+    # Whish Pay collect API (Phase 11) — online subscription checkout.
+    # "off" (default): the in-app checkout is disabled END TO END — the API
+    # refuses to start one, and the dashboard's subscribe button links to the
+    # static BILLING_WHISH_LINK instead (owner pays manually, sends the receipt
+    # on WhatsApp, the founder records the payment). The safe state while no
+    # merchant credentials exist: a simulated checkout must never grant Pro in
+    # a real deployment.
+    # "dev" never calls the network: the checkout completes locally with a
+    # loudly-logged SIMULATED success (CI/tests only). "live" needs the
+    # merchant channel + secret Whish issues after onboarding
+    # (https://apps.whish.money) — secrets resolve from Vault (modir/whish),
+    # never from code. Endpoint paths are config so a spec revision is a config
+    # fix, not a code change.
+    whish_pay_mode: str = Field(default="off")  # "off" | "dev" | "live"
+    whish_pay_base_url: str = Field(default="https://lb.sandbox.whish.money/itel-service/api")
+    whish_pay_create_path: str = Field(default="payment/whish")
+    whish_pay_status_path: str = Field(default="payment/collect/status")
+    whish_pay_channel: SecretStr = Field(default=SecretStr(""))
+    whish_pay_secret: SecretStr = Field(default=SecretStr(""))
+    whish_pay_website_url: str = Field(default="http://localhost:5173")
+    # Where Whish redirects the payer after the hosted page (the dashboard's
+    # result route, which then VERIFIES server-side before showing success).
+    billing_result_base_url: str = Field(default="http://localhost:5173/billing/result")
+
     # OCR engine (Phase 5). Provider-agnostic like mail_mode / po_dispatch_mode:
     # "stub" returns deterministic canned text for CI/tests (offline, no network,
     # no key — the default); "cloud_vision" calls Google Cloud Vision (better
     # Lebanese-Arabic accuracy) and is verified on the HOST (Docker DNS is blocked
-    # in-container). "tesseract" is reserved as a documented offline fallback.
-    ocr_mode: str = Field(default="stub")  # "stub" | "cloud_vision" | "tesseract"
+    # in-container). "gemini" OCRs via the existing Gemini key (no GCP service
+    # account needed). "tesseract" is reserved as a documented offline fallback.
+    ocr_mode: str = Field(default="stub")  # "stub" | "cloud_vision" | "gemini" | "tesseract"
     # A per-field confidence (0..1) at or below this is FLAGGED for closer review in
     # the UI (Task 5.6/5.12). It is a review SIGNAL, never an auto-commit switch:
     # every bill goes to a human in Phase 5 regardless of confidence.

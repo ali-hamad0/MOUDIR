@@ -64,10 +64,14 @@ class WhatsAppClient:
                 headers={"Authorization": f"Bearer {token}"},
             )
         if response.status_code not in (200, 201):
+            # Meta's error body carries the actionable reason (e.g. 131030
+            # "recipient not in allowed list" on a sandbox number, or an
+            # expired token) — without it a bare 400 is undiagnosable.
             log.error(
                 "whatsapp.send_text.failed",
                 status=response.status_code,
                 phone_number_id=self._phone_number_id,
+                meta_error=response.text[:500],
             )
             response.raise_for_status()
         log.info("whatsapp.send_text.sent", to=to, body_length=len(body))

@@ -79,6 +79,20 @@ class StorageClient:
             secret_key=settings.minio_secret_key.get_secret_value(),
             secure=settings.minio_secure,
         )
+        # A second client for PRESIGNING only: presigned URLs are signature-bound
+        # to the host, so browser-facing URLs must be signed for the public
+        # endpoint. The region is pinned because minio-py otherwise fetches the
+        # bucket location over the network first — and the public endpoint is
+        # NOT reachable from inside the container (that's the whole point of it).
+        # With the region set, presigning is pure local computation.
+        public = settings.minio_public_endpoint or settings.minio_endpoint
+        self._presign_client = Minio(
+            public,
+            access_key=settings.minio_access_key.get_secret_value(),
+            secret_key=settings.minio_secret_key.get_secret_value(),
+            secure=settings.minio_secure,
+            region="us-east-1",  # MinIO's default region
+        )
 
     @staticmethod
     def object_key(tenant_id: UUID, bill_id: UUID, filename: str | None) -> str:
@@ -154,7 +168,7 @@ class StorageClient:
         the owning tenant's object.
         """
         url = await asyncio.to_thread(
-            self._client.presigned_get_object, self._bucket, key, expires=ttl
+            self._presign_client.presigned_get_object, self._bucket, key, expires=ttl
         )
         log.info("storage.presigned_get", key=key, ttl_seconds=int(ttl.total_seconds()))
         return url

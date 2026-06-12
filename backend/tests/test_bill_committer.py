@@ -136,10 +136,14 @@ async def _qty(db: AsyncSession, tenant_id: UUID, product_id: UUID) -> int | Non
     return row.quantity if row else None
 
 
-async def _audit_count(db: AsyncSession, action: str) -> int:
+async def _audit_count(db: AsyncSession, tenant_id: UUID, action: str) -> int:
+    # Tenant-scoped: the suite runs against the live dev database, so a global
+    # count would be polluted by real rows outside the test's rolled-back txn.
     return (
         await db.execute(
-            select(func.count()).select_from(AuditLog).where(AuditLog.action == action)
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.tenant_id == tenant_id, AuditLog.action == action)
         )
     ).scalar_one()
 
@@ -160,8 +164,8 @@ async def test_valid_token_commits_lines_to_stock(db_session: AsyncSession) -> N
     assert await _qty(db_session, seed.tenant_id, seed.tracked_id) == 15
     assert await _qty(db_session, seed.tenant_id, seed.untracked_id) == 25
     assert (await _bill(db_session, seed.bill_id)).status == "committed"
-    assert await _audit_count(db_session, "bill.committed") == 1
-    assert await _audit_count(db_session, "bill.line_committed") == 2
+    assert await _audit_count(db_session, seed.tenant_id, "bill.committed") == 1
+    assert await _audit_count(db_session, seed.tenant_id, "bill.line_committed") == 2
 
 
 # ── The gate holds: no stock without a valid token ───────────────────────────
@@ -250,4 +254,4 @@ async def test_commit_failure_reverts_to_extracted(db_session: AsyncSession) -> 
 
     # The bill is back to extracted for re-review, with the failure audited.
     assert (await _bill(db_session, seed.bill_id)).status == "extracted"
-    assert await _audit_count(db_session, "bill.commit_failed") == 1
+    assert await _audit_count(db_session, seed.tenant_id, "bill.commit_failed") == 1

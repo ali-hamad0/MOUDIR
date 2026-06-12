@@ -84,7 +84,7 @@ export default function ManualOrderPage() {
             required
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+            className="min-h-[44px] rounded-lg border border-border bg-background px-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/40"
             placeholder="+96170000000"
           />
         </div>
@@ -101,7 +101,7 @@ export default function ManualOrderPage() {
                   required
                   value={item.product_id}
                   onChange={(e) => updateItem(idx, "product_id", e.target.value)}
-                  className="rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="min-h-[44px] w-full rounded-lg border border-border bg-background px-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/40"
                 >
                   <option value="">—</option>
                   {products.map((p) => (
@@ -121,8 +121,9 @@ export default function ManualOrderPage() {
                   min={1}
                   required
                   value={item.quantity}
+                  inputMode="numeric"
                   onChange={(e) => updateItem(idx, "quantity", Number(e.target.value))}
-                  className="rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  className="min-h-[44px] w-full rounded-lg border border-border bg-background px-3 text-base focus:outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </div>
 
@@ -130,7 +131,7 @@ export default function ManualOrderPage() {
                 <button
                   type="button"
                   onClick={() => removeItem(idx)}
-                  className="mb-0.5 rounded-lg px-2 py-2 text-sm text-destructive hover:bg-destructive/10"
+                  className="min-h-[44px] rounded-lg px-2 text-sm text-destructive hover:bg-destructive/10"
                 >
                   {t.manualOrderRemoveItem}
                 </button>
@@ -141,7 +142,7 @@ export default function ManualOrderPage() {
           <button
             type="button"
             onClick={addItem}
-            className="self-start rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted"
+            className="min-h-[44px] self-start rounded-lg border border-border px-3 text-sm text-muted-foreground hover:bg-muted"
           >
             + {t.manualOrderAddItem}
           </button>

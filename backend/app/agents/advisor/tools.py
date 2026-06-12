@@ -18,7 +18,7 @@ from datetime import date, datetime, time, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -320,7 +320,7 @@ async def compose_briefing(
         anomaly_count=anomaly.recent_flag_count,
     )
     model = ctx.router.tier2().with_structured_output(Briefing)
-    messages = [SystemMessage(content=system)]
+    messages = [SystemMessage(content=system), HumanMessage(content="اكتب الملخص الصباحي.")]
 
     attempts = ctx.settings.llm_max_retries + 1
     for attempt in range(attempts):

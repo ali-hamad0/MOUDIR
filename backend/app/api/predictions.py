@@ -35,6 +35,7 @@ from app.db.models import User
 from app.db.session import get_db_session
 from app.ml.predictors import StubAnomalyDetector, StubChurnPredictor, StubDemandPredictor
 from app.repositories.training_data import TrainingDataRepository
+from app.services.plan_gate import require_pro
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
 
@@ -50,6 +51,7 @@ def _mode(predictor: object, stub_type: type) -> str:
 @router.get("/demand", response_model=DemandPredictions)
 async def predict_demand(user: CurrentUser, db: Db, request: Request) -> DemandPredictions:
     """Next-day demand forecast per product that has sales history, for this tenant only."""
+    await require_pro(db, user.tenant_id, "insights")  # ML insights are a Pro feature
     rows = await TrainingDataRepository(db).daily_product_demand(user.tenant_id)
     predictor = request.app.state.demand_predictor
 
@@ -76,6 +78,7 @@ async def predict_demand(user: CurrentUser, db: Db, request: Request) -> DemandP
 @router.get("/churn", response_model=ChurnPredictions)
 async def predict_churn(user: CurrentUser, db: Db, request: Request) -> ChurnPredictions:
     """Churn risk per returning customer (customers with a past order), this tenant only."""
+    await require_pro(db, user.tenant_id, "insights")
     orders = await TrainingDataRepository(db).customer_orders(user.tenant_id)
     predictor = request.app.state.churn_predictor
     risks = predictor.predict_risks(user.tenant_id, orders)
@@ -104,6 +107,7 @@ async def predict_anomaly(
     window: Annotated[int, Query(ge=1, le=90)] = 14,
 ) -> AnomalyPredictions:
     """Whether each of the last `window` revenue days is anomalous, this tenant only."""
+    await require_pro(db, user.tenant_id, "insights")
     rows = await TrainingDataRepository(db).daily_revenue(user.tenant_id)
     predictor = request.app.state.anomaly_detector
     flags = predictor.flag_days(user.tenant_id, rows, window=window)

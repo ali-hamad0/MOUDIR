@@ -18,10 +18,12 @@ from app.api import (
     admin,
     approvals,
     auth,
+    billing,
     bills,
     chat,
     costs,
     customers,
+    dashboard,
     health,
     inventory,
     me,
@@ -43,6 +45,7 @@ from app.infra.rate_limiter import RateLimiter
 from app.infra.settings import Settings, get_settings
 from app.infra.storage import StorageClient
 from app.infra.supplier_dispatch import SupplierDispatcher
+from app.infra.tts import build_speech_synthesizer
 from app.infra.vault import resolve_secrets
 from app.infra.whatsapp import build_whatsapp_client
 from app.ml.predictors import (
@@ -257,6 +260,9 @@ async def lifespan(app: FastAPI):
     # handler calls transcribe() when an audio message arrives before dispatch.
     # In dev mode returns the Arabic stub without calling Gemini.
     app.state.audio_transcriber = build_audio_transcriber(settings)
+    # Speech synthesizer (Phase 10 — dashboard voice chat). The voice endpoint
+    # speaks Modir's reply back. In dev mode returns a silent WAV stub.
+    app.state.speech_synthesizer = build_speech_synthesizer(settings)
     log.info(
         "modir.agents.ready",
         langsmith=settings.langsmith_tracing,
@@ -335,7 +341,9 @@ def create_app() -> FastAPI:
     app.include_router(approvals.router)
     app.include_router(bills.router)
     app.include_router(customers.router)
+    app.include_router(dashboard.router)
     app.include_router(me.router)
+    app.include_router(billing.router)
     app.include_router(predictions.router)
     app.include_router(chat.router)
     app.include_router(webhooks.router)

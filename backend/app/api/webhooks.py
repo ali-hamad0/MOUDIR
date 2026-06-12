@@ -106,9 +106,14 @@ async def whatsapp_webhook(
     dispatcher = request.app.state.dispatcher
     reply = await dispatcher.dispatch(text, identity)
 
-    # 6. Send reply back to the sender via Meta
+    # 6. Send reply back to the sender via Meta. A send failure (e.g. the
+    # sandbox refusing a non-allowlisted recipient, an expired token) must NOT
+    # bubble up: the inbound work (order, reply text) is already committed, and
+    # any non-2xx back to Meta makes it retry the whole message.
     whatsapp_client = request.app.state.whatsapp_client
-    await whatsapp_client.send_text(to=message.from_, body=reply)
-
-    log.info("whatsapp.webhook.replied", **log_ctx)
+    try:
+        await whatsapp_client.send_text(to=message.from_, body=reply)
+        log.info("whatsapp.webhook.replied", **log_ctx)
+    except Exception:
+        log.warning("whatsapp.webhook.send_failed", exc_info=True, **log_ctx)
     return Response(status_code=200)

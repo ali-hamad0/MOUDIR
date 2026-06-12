@@ -50,6 +50,9 @@ class _FakeRouter:
     def tier1(self):
         return self._chat
 
+    def tier1_json(self):
+        return self._chat
+
     def tier2(self):
         return self._chat
 
@@ -198,6 +201,10 @@ async def test_order_agent_answers_delivery_question(db_session: AsyncSession) -
 
         def tier1(self):
             return self._m
+
+        def tier1_json(self):
+            # parse step in JSON mode → empty order (routes to the KB)
+            return _FakeChat('{"items": []}')
 
         def tier2(self):
             return self._m

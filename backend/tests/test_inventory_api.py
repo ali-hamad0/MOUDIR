@@ -64,12 +64,18 @@ async def test_inventory_list_is_tenant_scoped_and_joined(
 
     page = await list_inventory(user=user_a, db=db_session, limit=50, offset=0)
 
-    assert page.total == 1  # only A's inventory row
-    assert [row.product_id for row in page.items] == [a.product_ids[0]]
-    assert page.items[0].quantity == 20
+    # LEFT JOIN: ALL of A's catalog appears, not just products with a set level.
+    assert page.total == len(a.product_ids)
+    by_product = {row.product_id: row for row in page.items}
+    assert set(by_product) == set(a.product_ids)
+    assert by_product[a.product_ids[0]].quantity == 20
+    # Products with no inventory row yet show as quantity 0, not low.
+    for pid in a.product_ids[1:]:
+        assert by_product[pid].quantity == 0
+        assert by_product[pid].is_low is False
     # Joined to the catalog: the product name comes through.
-    assert page.items[0].name_ar.startswith("ShopA")
-    # B's row never appears for A — the Wall.
+    assert by_product[a.product_ids[0]].name_ar.startswith("ShopA")
+    # B's products never appear for A — the Wall.
     assert all(row.product_id != b.product_ids[0] for row in page.items)
 
 

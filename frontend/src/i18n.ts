@@ -1,10 +1,18 @@
-// Lebanese-Arabic UI strings. One dictionary, referenced by key — no hardcoded
-// literals scattered in components (the frontend mirror of the backend prompts/
-// rule). English keys double as the fallback/identifier.
+// UI strings in Lebanese Arabic (default) and English. One dictionary,
+// referenced by key — no hardcoded literals scattered in components (the
+// frontend mirror of the backend prompts/ rule). English keys double as the
+// fallback/identifier.
+//
+// Language switching: the choice persists in localStorage and `t` is resolved
+// once at module load. `setLang` reloads the page — `t` is imported statically
+// at module scope across the app (including module-level arrays like
+// NAV_ITEMS), so a reload is the cheapest way to re-resolve every string.
 
-export const t = {
+const ar = {
   appName: "مودير",
   tagline: "مساعد الأعمال الذكي للمحلات اللبنانية",
+  // Language toggle — shows the *other* language so it reads as a destination.
+  langToggle: "English",
   // Auth
   loginTitle: "تسجيل الدخول",
   loginSubtitle: "ادخل على لوحة محلّك",
@@ -41,7 +49,9 @@ export const t = {
   navReorders: "موافقات الشرا",
   navInsights: "التوقعات",
   navChat: "المحادثة",
-  navSetup: "ضبط المحل",
+  navSetup: "ملف المحل",
+  navMore: "المزيد",
+  close: "إغلاق",
   // Owner chat panel
   chatTitle: "المحادثة مع مودير",
   chatPlaceholder: "اكتب سؤالك هون...",
@@ -49,10 +59,40 @@ export const t = {
   chatSending: "عم نبعت...",
   chatError: "ما قدرنا نبعت الرسالة. جرّب مرة تانية.",
   chatWelcome: "أهلاً! كيف فيني ساعدك اليوم؟",
+  chatNewSession: "محادثة جديدة",
+  chatSessionsTitle: "المحادثات",
+  chatUntitled: "محادثة بلا عنوان",
+  chatHistoryError: "ما قدرنا نجيب المحادثات. جرّب مرة تانية.",
+  chatRecord: "🎙️ احكي",
+  chatRecordStop: "⏹ وقّف وابعت",
+  chatMicError: "ما قدرنا نوصل للمايكروفون. تأكّد من الإذن بالمتصفح.",
+  chatVoiceError: "ما قدرنا نبعت الرسالة الصوتية. جرّب مرة تانية.",
+  // Agent routing badge on each Modir chat bubble
+  agentOrder: "الطلبات",
+  agentInventory: "المخزون",
+  agentFinance: "المالية",
+  agentCustomer: "الزباين",
+  agentAdvisor: "المستشار",
   // App shell / whoami
   shop: "المحل",
   plan: "الباقة",
   productCount: "عدد المنتجات",
+  // Dashboard charts (Phase 10)
+  dashTodayRevenue: "إيرادات اليوم",
+  dashTodayOrders: "طلبات اليوم",
+  dashLowStock: "منتجات قريبة من النفاد",
+  dashAtRiskCustomers: "زباين بخطر الفقدان",
+  dashRevenueTrend: "الإيرادات — آخر ١٤ يوم",
+  dashOrdersTrend: "الطلبات — آخر ١٤ يوم",
+  dashAnomaly: "أيام غير اعتيادية (ذكاء اصطناعي)",
+  dashTopProducts: "الأكثر مبيعاً — آخر ٧ أيام",
+  dashDemandForecast: "توقّع الطلب لبكرا (ذكاء اصطناعي)",
+  dashInventoryLevels: "مستويات المخزون",
+  dashStatusMix: "حالة الطلبات — آخر ٧ أيام",
+  dashChurnTop: "أعلى الزباين خطراً (ذكاء اصطناعي)",
+  dashNoData: "ما في بيانات بعد",
+  dashUnits: "وحدة",
+  dashOrdersUnit: "طلب",
   whatsappNumberLabel: "رقم واتساب المحل",
   // Plan tiers (display)
   planFree: "مجاني",
@@ -106,6 +146,122 @@ export const t = {
   statusPending: "مستني",
   statusApproved: "تمت الموافقة",
   statusRejected: "مرفوض",
+  // Founder admin — tenant directory
+  tenantsTitle: "المحلات",
+  tenantsTab: "المحلات",
+  approvalsTab: "طلبات الاشتراك",
+  // Billing (Phase 11) — founder records payments; owners see renewal info
+  billingSection: "الاشتراك والدفع",
+  subTrialing: "تجريبي",
+  subActive: "مدفوع",
+  subPastDue: "متأخر الدفع",
+  subExpired: "منتهي",
+  subSuspended: "موقوف",
+  billingPaidThrough: "مدفوع لغاية",
+  recordPaymentBtn: "سجّل دفعة",
+  paymentAmountUsd: "المبلغ (دولار)",
+  paymentMethodLabel: "طريقة الدفع",
+  methodWhish: "Whish",
+  methodOmt: "OMT",
+  methodCash: "كاش",
+  methodCard: "بطاقة بنكية",
+  methodOther: "غير ذلك",
+  paymentMonths: "عدد الأشهر",
+  paymentNote: "ملاحظة (اختياري)",
+  paymentPlanChange: "الباقة بعد الدفع",
+  paymentPlanKeep: "بلا تغيير",
+  paymentRecorded: "انسجّلت الدفعة وتمدّد الاشتراك.",
+  paymentRecordError: "ما قدرنا نسجّل الدفعة. جرّب مرة تانية.",
+  paymentHistory: "سجل الدفعات",
+  noPaymentsYet: "ما في دفعات مسجّلة بعد.",
+  changePlanToPro: "حوّل لباقة برو",
+  changePlanToFree: "رجّع للباقة المجانية",
+  planChangeError: "ما قدرنا نغيّر الباقة.",
+  editSubscription: "تعديل الاشتراك",
+  subPlanLabel: "الباقة",
+  subPeriodEndLabel: "مدفوع لغاية (فاضي = بلا فترة)",
+  subscriptionUpdated: "انحدّث الاشتراك.",
+  subscriptionUpdateError: "ما قدرنا نحدّث الاشتراك. جرّب مرة تانية.",
+  resetSubscription: "إعادة تعيين",
+  resetSubscriptionConfirm: "رجّع الاشتراك لحالة ما قبل أي دفع (مجاني، بلا فترة)؟",
+  ovPastDueTenants: "محلات متأخرة الدفع",
+  renewWhishCta: "ادفع عبر Whish",
+  renewContactCta: "تواصل معنا للتجديد",
+  billingPastDueBanner: "اشتراكك متأخر الدفع — جدّد لتضل خدمات مودير شغّالة.",
+  billingExpiredBanner: "انتهى اشتراكك. جدّد لترجع كل الخدمات تشتغل.",
+  // Plans & upgrade (Phase 11) — Free vs Pro $20/mo
+  navUpgrade: "الترقية",
+  upgradeTitle: "باقات مودير",
+  upgradeSubtitle: "اختار الباقة يلي بتناسب محلك",
+  perMonth: "/ شهر",
+  bestValue: "الأفضل قيمة",
+  currentPlanBadge: "باقتك الحالية",
+  featProductsFree: "لغاية ١٠ منتجات",
+  featProductsPro: "منتجات بلا حدود",
+  featBillsFree: "٥ فواتير ممسوحة بالشهر",
+  featBillsPro: "فواتير بلا حدود",
+  featChatFree: "١٥ رسالة باليوم مع مودير",
+  featChatPro: "محادثة بلا حدود",
+  featInsightsFree: "بلا توقعات ذكية",
+  featInsightsPro: "توقعات ذكية: الطلب، الزباين، المبيعات",
+  featVoiceFree: "بلا محادثة صوتية",
+  featVoicePro: "محادثة صوتية مع مودير",
+  featOrdersBoth: "طلبات واتساب بلا حدود",
+  subscribeNow: "اشترك هلق",
+  subscribeViaWhish: "اشترك هلق — ادفع عبر Whish",
+  manualActivationHint:
+    "بعد ما تدفع، ابعتلنا إيصال الدفع عالواتساب وبنفعّل اشتراكك بأسرع وقت.",
+  sendReceiptWhatsapp: "ابعت الإيصال عالواتساب",
+  receiptPrefill: "مرحبا، دفعت اشتراك مودير برو عبر Whish — هيدا الإيصال:",
+  payingRedirect: "عم نحوّلك لصفحة الدفع...",
+  checkoutError: "ما قدرنا نبلّش عملية الدفع. جرّب مرة تانية.",
+  youArePro: "أنت مشترك بباقة برو.",
+  billingResultChecking: "عم نتأكد من الدفعة...",
+  billingResultSuccess: "مبروك! صار عندك مودير برو.",
+  billingResultFailed: "ما نجحت عملية الدفع. ما انسحب أي مبلغ إضافي.",
+  billingResultPending: "الدفعة بعدها قيد التأكيد. رح يتفعّل اشتراكك تلقائياً أول ما تكتمل.",
+  backToHome: "رجوع للرئيسية",
+  proFeatureLock: "ميزة برو",
+  proFeatureLockHint: "رقّي لباقة برو لتفتح هالميزة.",
+  upgradeCta: "رقّي لبرو",
+  limitProductsMsg: "وصلت لحد المنتجات بالباقة المجانية (١٠). رقّي لبرو لمنتجات بلا حدود.",
+  limitBillsMsg: "وصلت لحد فواتير هالشهر بالباقة المجانية (٥). رقّي لبرو لفواتير بلا حدود.",
+  limitChatMsg: "خلصت رسائل اليوم بالباقة المجانية (١٥). رقّي لبرو لمحادثة بلا حدود.",
+  // Founder admin — platform overview dashboard
+  overviewTab: "نظرة عامة",
+  overviewTitle: "لوحة المؤسس",
+  ovTotalTenants: "المحلات",
+  ovActiveTenants: "محلات فعّالة",
+  ovOrdersToday: "طلبات اليوم (كل المنصة)",
+  ovTotalCustomers: "مجموع الزباين",
+  ovAiCost30d: "كلفة الذكاء (٣٠ يوم)",
+  ovAiCostToday: "كلفة الذكاء اليوم",
+  ovPendingRequests: "طلبات بانتظار المراجعة",
+  ovTenantGrowth: "نمو المحلات (تراكمي)",
+  ovPlanMix: "توزيع الباقات",
+  ovSignupFunnel: "طلبات التسجيل حسب الحالة",
+  ovCostTrend: "كلفة الذكاء اليومية (٣٠ يوم)",
+  ovTopCostTenants: "أعلى المحلات كلفة ذكاء",
+  ovOrdersByTenant: "طلبات اليوم حسب المحل",
+  ovCustomersByTenant: "الزباين حسب المحل",
+  ovError: "ما قدرنا نجيب بيانات اللوحة.",
+  ovPartialNote: "بعض الأرقام ناقصة — ما قدرنا نجيب كل بيانات المحلات.",
+  tenantsEmpty: "ما في محلات بعد.",
+  tenantsError: "ما قدرنا نجيب المحلات.",
+  tenantActive: "فعّال",
+  tenantSuspended: "موقوف",
+  tenantPlanLabel: "الخطة",
+  tenantCustomersLabel: "الزباين",
+  tenantOrdersTodayLabel: "طلبات اليوم",
+  tenantCostsTitle: "كلفة الذكاء الاصطناعي (٣٠ يوم)",
+  tenantDetailError: "ما قدرنا نجيب تفاصيل المحل.",
+  suspendTenant: "وقّف المحل",
+  reactivateTenant: "رجّع فعّلو",
+  suspendReasonPrompt: "سبب التوقيف",
+  reactivateReasonPrompt: "سبب التفعيل",
+  suspendConfirm: "أكّد التوقيف",
+  reactivateConfirm: "أكّد التفعيل",
+  suspendWarning: "توقيف المحل بيقطع الدخول عاللوحة والواتساب فورًا.",
   // Activation / set-password
   activateTitle: "فعّل حسابك",
   activateChecking: "عم نتأكد من الرابط...",
@@ -131,7 +287,7 @@ export const t = {
   // Inventory list
   inventoryTitle: "المخزون",
   noInventoryYet: "ما في منتجات بمخزونك بعد",
-  noInventoryHint: "ضيف منتجاتك من ضبط المحل وبعدها ضبّط الكميات هون.",
+  noInventoryHint: "اضغط «ضيف منتج» لتضيف أول منتج وتضبّط كميتو.",
   inventoryError: "ما قدرنا نجيب المخزون.",
   colProduct: "المنتج",
   colQuantity: "الكمية",
@@ -294,11 +450,16 @@ export const t = {
   remove: "شيل",
   optional: "اختياري",
 
-  // ---- Setup wizard ----
-  wizardWelcome: "مرحبا بك في مودير — خلّينا نضبط محلك",
-  wizardStep: "خطوة",
-  wizardOf: "من",
-  // Step 1 — business details
+  // ---- Shop profile page ----
+  profileTitle: "ملف المحل",
+  profileSubtitle: "كل معلومات محلك بمطرح واحد — عدّل أي قسم واحفظه لحالو.",
+  sectionSaved: "انحفظ ✓",
+  saveSection: "حفظ القسم",
+  // Products moved to the inventory page
+  productsCardTitle: "المنتجات والمخزون",
+  productsCardBody: "إضافة المنتجات وتعديل الكميات صارت من صفحة المخزون.",
+  goToInventory: "روح عصفحة المخزون",
+  // Business details section
   stepBusinessTitle: "تفاصيل المحل",
   businessName: "اسم المحل",
   businessDescription: "وصف المحل",
@@ -306,8 +467,7 @@ export const t = {
   deliveryRadiusKm: "مدى التوصيل (كم)",
   acceptsDelivery: "منوصّل",
   acceptsPickup: "في استلام من المحل",
-  // Step 2 — products
-  stepProductsTitle: "المنتجات",
+  // Products (managed from the inventory page)
   productNameAr: "اسم المنتج (عربي)",
   productNameEn: "اسم المنتج (إنكليزي)",
   priceLbp: "السعر (ل.ل.)",
@@ -318,19 +478,16 @@ export const t = {
   addProduct: "ضيف منتج",
   addingProduct: "عم نضيف...",
   noProductsYet: "ما في منتجات بعد. ضيف أول منتج.",
-  atLeastOneProduct: "لازم تضيف منتج واحد على الأقل.",
-  productsInStore: "منتجات محلّك",
-  productAdded: "تضاف المنتج.",
   productLoadError: "ما قدرنا نجيب المنتجات.",
   // Optional initial stock seeded with a product (creates its inventory row).
   initialStock: "الكمية بالمخزون (اختياري)",
-  // Step 3 — operating hours
+  // Operating hours section
   stepHoursTitle: "أوقات الدوام",
   closed: "مسكّر",
   openTime: "من",
   closeTime: "لـ",
   ramadanNote: "ملاحظة (مثلاً دوام رمضان)",
-  // Step 4 — policies
+  // Policies section
   stepPoliciesTitle: "سياسات المحل",
   minOrderLbp: "الحد الأدنى للطلب (ل.ل.)",
   deliveryFeeLbp: "رسوم التوصيل (ل.ل.)",
@@ -346,9 +503,523 @@ export const t = {
   daySun: "الأحد",
 } as const;
 
-export type TranslationKey = keyof typeof t;
+export type TranslationKey = keyof typeof ar;
 
-/** Display a plan tier in Arabic, falling back to the raw value. */
+// English mirror — same keys, enforced by the Record type (a missing or extra
+// key is a compile error).
+const en: Record<TranslationKey, string> = {
+  appName: "Modir",
+  tagline: "The smart business assistant for Lebanese shops",
+  langToggle: "عربي",
+  // Auth
+  loginTitle: "Log in",
+  loginSubtitle: "Access your shop dashboard",
+  whatsappNumber: "Shop WhatsApp number",
+  email: "Email",
+  password: "Password",
+  loginButton: "Log in",
+  loggingIn: "Logging you in...",
+  invalidCredentials: "Something's wrong with your details. Try again.",
+  networkError: "Couldn't reach the server. Check your internet and try again.",
+  logout: "Log out",
+  loading: "Loading...",
+  required: "This field is required",
+  // Public signup request
+  signupTitle: "Register your shop with Modir",
+  signupSubtitle: "Send us your request and our team will review it and get in touch.",
+  signupBusinessName: "Shop name",
+  signupOwnerPhone: "Your phone number",
+  signupEmail: "Email",
+  signupSubmit: "Send request",
+  signupSubmitting: "Sending...",
+  signupSuccessTitle: "We got your request!",
+  signupSuccessBody: "We'll review your request and email you an activation link once it's approved.",
+  signupDuplicate: "There's already a pending request with this email.",
+  signupError: "Couldn't send the request. Try again.",
+  signupHaveAccount: "Already have an account? Log in",
+  signupCta: "New shop? Register here",
+  // Navigation
+  navHome: "Home",
+  navOrders: "Orders",
+  navCustomers: "Customers",
+  navInventory: "Inventory",
+  navReorders: "Purchase approvals",
+  navInsights: "Insights",
+  navChat: "Chat",
+  navSetup: "Shop profile",
+  navMore: "More",
+  close: "Close",
+  // Owner chat panel
+  chatTitle: "Chat with Modir",
+  chatPlaceholder: "Type your question here...",
+  chatSend: "Send",
+  chatSending: "Sending...",
+  chatError: "Couldn't send the message. Try again.",
+  chatWelcome: "Hi! How can I help you today?",
+  chatNewSession: "New chat",
+  chatSessionsTitle: "Chats",
+  chatUntitled: "Untitled chat",
+  chatHistoryError: "Couldn't load your chats. Try again.",
+  chatRecord: "🎙️ Talk",
+  chatRecordStop: "⏹ Stop & send",
+  chatMicError: "Couldn't access the microphone. Check the browser permission.",
+  chatVoiceError: "Couldn't send the voice message. Try again.",
+  // Agent routing badge on each Modir chat bubble
+  agentOrder: "Orders",
+  agentInventory: "Inventory",
+  agentFinance: "Finance",
+  agentCustomer: "Customers",
+  agentAdvisor: "Advisor",
+  // App shell / whoami
+  shop: "Shop",
+  plan: "Plan",
+  productCount: "Product count",
+  // Dashboard charts (Phase 10)
+  dashTodayRevenue: "Today's revenue",
+  dashTodayOrders: "Today's orders",
+  dashLowStock: "Products running low",
+  dashAtRiskCustomers: "Customers at churn risk",
+  dashRevenueTrend: "Revenue — last 14 days",
+  dashOrdersTrend: "Orders — last 14 days",
+  dashAnomaly: "Unusual days (AI)",
+  dashTopProducts: "Top sellers — last 7 days",
+  dashDemandForecast: "Tomorrow's demand forecast (AI)",
+  dashInventoryLevels: "Inventory levels",
+  dashStatusMix: "Order statuses — last 7 days",
+  dashChurnTop: "Highest-risk customers (AI)",
+  dashNoData: "No data yet",
+  dashUnits: "units",
+  dashOrdersUnit: "orders",
+  whatsappNumberLabel: "Shop WhatsApp number",
+  // Plan tiers (display)
+  planFree: "Free",
+  planPro: "Pro",
+  // Generic states
+  retry: "Try again",
+  errorGeneric: "Something went wrong. Try again.",
+  // Setup gating / banner
+  setupIncompleteTitle: "Your shop isn't ready yet",
+  setupIncompleteBody: "Finish setting up your shop to start taking customer orders.",
+  setupIncompleteCta: "Finish setup",
+  // Order feed
+  ordersToday: "Today's orders",
+  noOrdersYet: "No orders today yet",
+  noOrdersHint: "The first order that comes in will show up here.",
+  ordersError: "Couldn't load the orders.",
+  unknownCustomer: "Customer",
+  fulfillmentPickup: "Pickup from shop",
+  fulfillmentDelivery: "Delivery",
+  statusConfirmed: "Confirmed",
+  statusPreparing: "Preparing",
+  statusDelivered: "Delivered",
+  statusCompleted: "Completed",
+  qtyTimes: "×",
+  // Order — mark complete (triggers deduction + reorder drafting)
+  markComplete: "Complete order",
+  markCompleteConfirmTitle: "Complete this order?",
+  markCompleteConfirmBody: "We'll deduct the quantities from inventory and this can't be undone. Are you sure?",
+  markCompleteConfirm: "Confirm completion",
+  orderCompleted: "Order completed and stock deducted.",
+  orderCompleteError: "Couldn't complete the order. Try again.",
+  orderNotCompletable: "We can't complete this order (it may already be done, or there isn't enough stock).",
+  // Founder admin — approvals
+  adminTitle: "Modir admin",
+  adminLoginTitle: "Admin login",
+  adminLoginSubtitle: "For the Modir founder only",
+  approvalsTitle: "Signup requests",
+  approvalsEmpty: "No pending requests.",
+  approvalsError: "Couldn't load the requests.",
+  reqBusiness: "Shop name",
+  reqPhone: "Owner phone",
+  reqEmail: "Email",
+  reqDate: "Date",
+  approve: "Approve",
+  reject: "Reject",
+  approveWaPrompt: "Shop WhatsApp number",
+  approveConfirm: "Approve & activate",
+  rejectReasonPrompt: "Rejection reason",
+  rejectConfirm: "Reject request",
+  cancel: "Cancel",
+  statusPending: "Pending",
+  statusApproved: "Approved",
+  statusRejected: "Rejected",
+  // Founder admin — tenant directory
+  tenantsTitle: "Shops",
+  tenantsTab: "Shops",
+  approvalsTab: "Signup requests",
+  // Billing (Phase 11) — founder records payments; owners see renewal info
+  billingSection: "Subscription & billing",
+  subTrialing: "Trial",
+  subActive: "Active",
+  subPastDue: "Past due",
+  subExpired: "Expired",
+  subSuspended: "Suspended",
+  billingPaidThrough: "Paid through",
+  recordPaymentBtn: "Record payment",
+  paymentAmountUsd: "Amount (USD)",
+  paymentMethodLabel: "Payment method",
+  methodWhish: "Whish",
+  methodOmt: "OMT",
+  methodCash: "Cash",
+  methodCard: "Bank card",
+  methodOther: "Other",
+  paymentMonths: "Months",
+  paymentNote: "Note (optional)",
+  paymentPlanChange: "Plan after payment",
+  paymentPlanKeep: "No change",
+  paymentRecorded: "Payment recorded — subscription extended.",
+  paymentRecordError: "Couldn't record the payment. Try again.",
+  paymentHistory: "Payment history",
+  noPaymentsYet: "No payments recorded yet.",
+  changePlanToPro: "Upgrade to Pro",
+  changePlanToFree: "Move back to Free",
+  planChangeError: "Couldn't change the plan.",
+  editSubscription: "Edit subscription",
+  subPlanLabel: "Plan",
+  subPeriodEndLabel: "Paid through (empty = no period)",
+  subscriptionUpdated: "Subscription updated.",
+  subscriptionUpdateError: "Couldn't update the subscription. Try again.",
+  resetSubscription: "Reset",
+  resetSubscriptionConfirm: "Reset the subscription to a never-paid state (free, no period)?",
+  ovPastDueTenants: "Shops past due",
+  renewWhishCta: "Pay with Whish",
+  renewContactCta: "Contact us to renew",
+  billingPastDueBanner: "Your subscription is past due — renew to keep Modir running.",
+  billingExpiredBanner: "Your subscription has expired. Renew to restore all services.",
+  // Plans & upgrade (Phase 11) — Free vs Pro $20/mo
+  navUpgrade: "Upgrade",
+  upgradeTitle: "Modir plans",
+  upgradeSubtitle: "Pick the plan that fits your shop",
+  perMonth: "/ month",
+  bestValue: "Best value",
+  currentPlanBadge: "Your current plan",
+  featProductsFree: "Up to 10 products",
+  featProductsPro: "Unlimited products",
+  featBillsFree: "5 scanned bills per month",
+  featBillsPro: "Unlimited bills",
+  featChatFree: "15 messages per day with Modir",
+  featChatPro: "Unlimited chat",
+  featInsightsFree: "No AI insights",
+  featInsightsPro: "AI insights: demand, customers, sales",
+  featVoiceFree: "No voice chat",
+  featVoicePro: "Voice chat with Modir",
+  featOrdersBoth: "Unlimited WhatsApp orders",
+  subscribeNow: "Subscribe now",
+  subscribeViaWhish: "Subscribe now — pay with Whish",
+  manualActivationHint:
+    "After you pay, send us the receipt on WhatsApp and we'll activate your subscription right away.",
+  sendReceiptWhatsapp: "Send the receipt on WhatsApp",
+  receiptPrefill: "Hi, I paid the Modir Pro subscription via Whish — here's the receipt:",
+  payingRedirect: "Taking you to the payment page...",
+  checkoutError: "Couldn't start the checkout. Try again.",
+  youArePro: "You're on the Pro plan.",
+  billingResultChecking: "Verifying your payment...",
+  billingResultSuccess: "Congratulations! You're now on Modir Pro.",
+  billingResultFailed: "The payment didn't go through. Nothing extra was charged.",
+  billingResultPending: "The payment is still confirming. Your subscription will activate automatically once it completes.",
+  backToHome: "Back to home",
+  proFeatureLock: "Pro feature",
+  proFeatureLockHint: "Upgrade to Pro to unlock this feature.",
+  upgradeCta: "Upgrade to Pro",
+  limitProductsMsg: "You've reached the Free plan's product limit (10). Upgrade to Pro for unlimited products.",
+  limitBillsMsg: "You've reached this month's Free bill limit (5). Upgrade to Pro for unlimited bills.",
+  limitChatMsg: "You've used today's Free messages (15). Upgrade to Pro for unlimited chat.",
+  // Founder admin — platform overview dashboard
+  overviewTab: "Overview",
+  overviewTitle: "Founder dashboard",
+  ovTotalTenants: "Shops",
+  ovActiveTenants: "Active shops",
+  ovOrdersToday: "Orders today (platform)",
+  ovTotalCustomers: "Total customers",
+  ovAiCost30d: "AI cost (30d)",
+  ovAiCostToday: "AI cost today",
+  ovPendingRequests: "Requests awaiting review",
+  ovTenantGrowth: "Shop growth (cumulative)",
+  ovPlanMix: "Plan mix",
+  ovSignupFunnel: "Signup requests by status",
+  ovCostTrend: "Daily AI cost (30d)",
+  ovTopCostTenants: "Top shops by AI cost",
+  ovOrdersByTenant: "Today's orders by shop",
+  ovCustomersByTenant: "Customers by shop",
+  ovError: "Couldn't load the dashboard data.",
+  ovPartialNote: "Some numbers are incomplete — we couldn't fetch every shop's data.",
+  tenantsEmpty: "No shops yet.",
+  tenantsError: "Couldn't load the shops.",
+  tenantActive: "Active",
+  tenantSuspended: "Suspended",
+  tenantPlanLabel: "Plan",
+  tenantCustomersLabel: "Customers",
+  tenantOrdersTodayLabel: "Orders today",
+  tenantCostsTitle: "AI cost (30 days)",
+  tenantDetailError: "Couldn't load the shop details.",
+  suspendTenant: "Suspend shop",
+  reactivateTenant: "Reactivate shop",
+  suspendReasonPrompt: "Suspension reason",
+  reactivateReasonPrompt: "Reactivation reason",
+  suspendConfirm: "Confirm suspension",
+  reactivateConfirm: "Confirm reactivation",
+  suspendWarning: "Suspending a shop cuts dashboard and WhatsApp access immediately.",
+  // Activation / set-password
+  activateTitle: "Activate your account",
+  activateChecking: "Checking the link...",
+  activateInvalid: "This activation link is invalid or expired. Ask Modir for a new one.",
+  newPassword: "New password",
+  confirmPassword: "Confirm password",
+  passwordsMismatch: "The passwords don't match.",
+  passwordTooShort: "The password must be at least 8 characters.",
+  activateButton: "Activate & log in",
+  activateSuccess: "Your account is active! You can log in now.",
+  goToLogin: "Go to login",
+  showPassword: "Show",
+  hidePassword: "Hide",
+  // Customers list
+  customersTitle: "Customers",
+  noCustomersYet: "No customers yet",
+  noCustomersHint: "Your first customer's order will show up here.",
+  customersError: "Couldn't load the customers.",
+  colCustomer: "Customer",
+  colOrders: "Orders",
+  colTotalSpent: "Total spent",
+  colLastOrder: "Last order",
+  // Inventory list
+  inventoryTitle: "Inventory",
+  noInventoryYet: "No products in your inventory yet",
+  noInventoryHint: "Tap “Add product” to add your first product and set its quantity.",
+  inventoryError: "Couldn't load the inventory.",
+  colProduct: "Product",
+  colQuantity: "Quantity",
+  colThreshold: "Reorder threshold",
+  colReorderQty: "Reorder quantity",
+  colSupplier: "Supplier",
+  lowStockBadge: "Low stock",
+  noSupplier: "No supplier",
+  notSet: "Not set",
+  edit: "Edit",
+  // Inventory edit form
+  editInventoryTitle: "Edit “{name}” stock",
+  fieldQuantity: "Current quantity",
+  fieldThreshold: "Reorder threshold",
+  fieldThresholdHint: "When the quantity drops to this level or below, we flag it as low stock.",
+  fieldReorderQty: "Reorder quantity",
+  fieldSupplier: "Supplier",
+  mustBeZeroOrMore: "Must be a number, zero or more.",
+  inventorySaved: "Quantity saved.",
+  inventorySaveError: "Couldn't save. Try again.",
+  // ---- Owner approvals inbox (reorder POs) ----
+  reordersTitle: "Purchase order approvals",
+  reordersError: "Couldn't load the purchase orders.",
+  reordersEmpty: "No purchase orders awaiting approval",
+  manualQueueTitle: "Need manual sending",
+  poProduct: "Product",
+  poQuantity: "Suggested quantity",
+  poSupplier: "Supplier",
+  poAgentNote: "Assistant's note to the supplier",
+  poNoSupplier: "No supplier",
+  poDraftReason: "Reason for the order",
+  poDispatchError: "Send failure reason",
+  // PO status labels
+  poStatusDraft: "Awaiting approval",
+  poStatusApproved: "Approved",
+  poStatusSent: "Sent",
+  poStatusRejected: "Rejected",
+  poStatusFailed: "Send failed",
+  // Actions
+  poApprove: "Approve",
+  poReject: "Reject",
+  poApproveNoteLabel: "Note (optional)",
+  poApproveConfirm: "Approve & send",
+  poRejectReasonLabel: "Rejection reason",
+  poRejectConfirm: "Reject order",
+  poMarkSent: "Mark as sent",
+  poRetry: "Retry sending",
+  // Toasts
+  poApproved: "Approved — sending to the supplier.",
+  poRejected: "Purchase order rejected.",
+  poMarkedSent: "Order marked as sent.",
+  poActionError: "Couldn't complete the action. Try again.",
+  poRejectReasonRequired: "You need to write a rejection reason.",
+  // ---- Supplier bills (OCR) ----
+  navBills: "Bills",
+  billsTitle: "Supplier bills",
+  billsError: "Couldn't load the bills.",
+  billsEmpty: "No bills yet. Snap a supplier bill to get started.",
+  billUpload: "Snap / upload a bill",
+  billUploading: "Uploading...",
+  billUploaded: "Bill received — reading it now.",
+  billUploadError: "Couldn't upload the bill. Try again.",
+  billUploadBadType: "Only images are accepted (JPG, PNG).",
+  billSupplier: "Supplier",
+  billNoSupplier: "Unknown supplier",
+  billTotal: "Total",
+  billDate: "Date",
+  billConfidence: "Confidence",
+  // Bill status labels
+  billStatusUploaded: "Uploading",
+  billStatusProcessing: "Reading the bill",
+  billStatusExtracted: "Awaiting review",
+  billStatusCommitting: "Recording",
+  billStatusCommitted: "Recorded to inventory",
+  billStatusRejected: "Rejected",
+  billStatusFailed: "Couldn't read it",
+  // ---- Bill review screen ----
+  billReviewTitle: "Bill review",
+  billBack: "Back to bills",
+  billImageAlt: "Bill image",
+  billNoImage: "No image",
+  billLines: "Line items",
+  billLineName: "Name",
+  billLineQty: "Quantity",
+  billLineAmount: "Amount",
+  billLineProduct: "Inventory product",
+  billLinePick: "Pick a product",
+  billLineLowConfidence: "Double-check this reading",
+  billSaveLines: "Save changes",
+  billLinesSaved: "Changes saved.",
+  billApprove: "Approve & record to inventory",
+  billApproveConfirm: "Confirm approval",
+  billApproved: "Approved — recording to inventory.",
+  billReject: "Reject",
+  billRejectReasonLabel: "Rejection reason",
+  billRejectConfirm: "Reject bill",
+  billRejected: "Bill rejected.",
+  billRejectReasonRequired: "You need to write a rejection reason.",
+  billUnmappedWarning: "Some line items aren't linked to a product yet. Link them before approving.",
+  billNotFound: "We couldn't find this bill.",
+  billReviewError: "Couldn't load the bill.",
+  billActionError: "Couldn't complete the action. Try again.",
+  // ---- Insights (ML predictions panel, Phase 6) ----
+  insightsTitle: "AI insights",
+  insightsError: "Couldn't load the insights.",
+  insightsStubNote: "Predictions are off for now (the models are still training). Showing the lists without numbers.",
+  asOfLabel: "As of",
+  insightsDemandTitle: "Tomorrow's demand forecast",
+  insightsDemandEmpty: "No products with sales history yet.",
+  colPredictedUnits: "Predicted quantity",
+  insightsChurnTitle: "Customers at churn risk",
+  insightsChurnEmpty: "No customers to score yet.",
+  colChurnRisk: "Risk level",
+  insightsAnomalyTitle: "Daily sales activity",
+  insightsAnomalyEmpty: "No sales recorded yet.",
+  colDay: "Day",
+  colRevenue: "Revenue",
+  anomalyFlag: "Unusual",
+  anomalyNormal: "Normal",
+  // Pagination
+  prevPage: "Previous",
+  nextPage: "Next",
+  pageOf: "Page {n} of {total}",
+  // ---- AI status banner + manual order (Phase 8, Task 8.5) ----
+  navManualOrder: "Manual order",
+  aiBannerTitle: "The service is unavailable right now",
+  aiBannerBody: "The AI is temporarily down — you can enter orders manually.",
+  aiBannerCta: "Enter a manual order",
+  manualOrderTitle: "Manual order entry",
+  manualOrderCustomerPhone: "Customer phone number",
+  manualOrderProductLabel: "Product",
+  manualOrderQtyLabel: "Quantity",
+  manualOrderAddItem: "Add product",
+  manualOrderRemoveItem: "Remove",
+  manualOrderSubmit: "Record order",
+  manualOrderSubmitting: "Recording...",
+  manualOrderSuccess: "Order recorded successfully.",
+  manualOrderCustomerNotFound: "We couldn't find this customer in your shop.",
+  manualOrderProductNotFound: "Product not in your shop's catalog.",
+  manualOrderError: "Couldn't record the order. Try again.",
+  manualOrderNoProducts: "You need to add at least one product.",
+  // ---- Cost dashboard (Phase 8, Task 8.7) ----
+  navCosts: "Costs",
+  costsTitle: "AI costs",
+  costsSubtitle: "Last 30 days — LLM spend in USD",
+  costsTodayLabel: "Today",
+  costsBudgetLabel: "Daily budget",
+  costsNoBudget: "No budget set",
+  costsNoData: "No spend data right now.",
+  costsUSD: "USD",
+  // Generic actions
+  next: "Next",
+  back: "Back",
+  save: "Save",
+  saving: "Saving...",
+  finish: "Done",
+  add: "Add",
+  remove: "Remove",
+  optional: "Optional",
+
+  // ---- Shop profile page ----
+  profileTitle: "Shop profile",
+  profileSubtitle: "All your shop's info in one place — edit any section and save it on its own.",
+  sectionSaved: "Saved ✓",
+  saveSection: "Save section",
+  // Products moved to the inventory page
+  productsCardTitle: "Products & inventory",
+  productsCardBody: "Adding products and editing quantities now happens on the inventory page.",
+  goToInventory: "Go to the inventory page",
+  // Business details section
+  stepBusinessTitle: "Shop details",
+  businessName: "Shop name",
+  businessDescription: "Shop description",
+  businessLocation: "Location",
+  deliveryRadiusKm: "Delivery radius (km)",
+  acceptsDelivery: "We deliver",
+  acceptsPickup: "Pickup available",
+  // Products (managed from the inventory page)
+  productNameAr: "Product name (Arabic)",
+  productNameEn: "Product name (English)",
+  priceLbp: "Price (LBP)",
+  priceUsd: "Price ($)",
+  unit: "Unit",
+  category: "Category",
+  isAvailable: "Available",
+  addProduct: "Add product",
+  addingProduct: "Adding...",
+  noProductsYet: "No products yet. Add your first one.",
+  productLoadError: "Couldn't load the products.",
+  initialStock: "Stock quantity (optional)",
+  // Operating hours section
+  stepHoursTitle: "Opening hours",
+  closed: "Closed",
+  openTime: "From",
+  closeTime: "To",
+  ramadanNote: "Note (e.g. Ramadan hours)",
+  // Policies section
+  stepPoliciesTitle: "Shop policies",
+  minOrderLbp: "Minimum order (LBP)",
+  deliveryFeeLbp: "Delivery fee (LBP)",
+  deliveryZones: "Delivery zones",
+  paymentMethods: "Payment methods",
+  // Days of the week (0=Mon ... 6=Sun)
+  dayMon: "Monday",
+  dayTue: "Tuesday",
+  dayWed: "Wednesday",
+  dayThu: "Thursday",
+  dayFri: "Friday",
+  daySat: "Saturday",
+  daySun: "Sunday",
+};
+
+// ---- Language selection -----------------------------------------------------
+
+export type Lang = "ar" | "en";
+
+const LANG_STORAGE_KEY = "modir.lang";
+
+/** The active UI language, resolved once at module load. Arabic is the default. */
+export const lang: Lang =
+  localStorage.getItem(LANG_STORAGE_KEY) === "en" ? "en" : "ar";
+
+/**
+ * Persist the language choice and reload. `t` (and module-level values built
+ * from it, like NAV_ITEMS) are resolved at load time, so a reload is required
+ * for the switch to take effect everywhere.
+ */
+export function setLang(next: Lang): void {
+  localStorage.setItem(LANG_STORAGE_KEY, next);
+  window.location.reload();
+}
+
+export const t: Record<TranslationKey, string> = lang === "en" ? en : ar;
+
+/** Display a plan tier in the UI language, falling back to the raw value. */
 export function planLabel(tier: string): string {
   if (tier === "free") return t.planFree;
   if (tier === "pro") return t.planPro;
@@ -366,14 +1037,14 @@ export const DAY_LABELS = [
   t.daySun,
 ] as const;
 
-/** Fulfillment type → Arabic label. */
+/** Fulfillment type → display label. */
 export function fulfillmentLabel(type: string): string {
   return type === "delivery" ? t.fulfillmentDelivery : t.fulfillmentPickup;
 }
 
 /**
- * Order status → Arabic label + a Tailwind class pair. Color is paired with the
- * text label (and a dot in the UI), never used alone (a11y color-not-only).
+ * Order status → display label + a Tailwind class pair. Color is paired with
+ * the text label (and a dot in the UI), never used alone (a11y color-not-only).
  */
 export function statusMeta(status: string): { label: string; cls: string } {
   switch (status) {
@@ -391,7 +1062,7 @@ export function statusMeta(status: string): { label: string; cls: string } {
 }
 
 /**
- * Purchase-order status → Arabic label + a Tailwind class pair, for the owner
+ * Purchase-order status → display label + a Tailwind class pair, for the owner
  * approvals inbox. Color is always paired with the text label (and a dot in the
  * UI), never used alone (a11y color-not-only).
  */
@@ -412,8 +1083,9 @@ export function poStatusMeta(status: string): { label: string; cls: string } {
 }
 
 /**
- * Supplier-bill status → Arabic label + Tailwind class pair, for the bills list +
- * review screen. Color is always paired with the text label (a11y color-not-only).
+ * Supplier-bill status → display label + Tailwind class pair, for the bills
+ * list + review screen. Color is always paired with the text label (a11y
+ * color-not-only).
  */
 export function billStatusMeta(status: string): { label: string; cls: string } {
   switch (status) {

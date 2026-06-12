@@ -9,5 +9,12 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    // The dev container bind-mounts the source from Windows; file-change
+    // events don't cross that mount, so without polling Vite serves stale
+    // modules until the container restarts.
+    watch: {
+      usePolling: true,
+      interval: 500,
+    },
   },
 });

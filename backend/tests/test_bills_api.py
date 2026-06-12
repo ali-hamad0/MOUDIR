@@ -30,10 +30,11 @@ from app.services.supplier_bills import SupplierBillService
 
 
 def _settings() -> Settings:
-    """Minimal settings with the upload limits the route reads."""
+    """Minimal settings with the upload limits + image-URL TTL the routes read."""
     return Settings.model_construct(
         bill_upload_max_bytes=10 * 1024 * 1024,
         bill_upload_allowed_content_types=["image/jpeg", "image/png"],
+        bill_image_url_ttl_minutes=15,
     )
 
 
@@ -45,6 +46,9 @@ class _SpyStorage:
 
     async def put_stream(self, key: str, data: bytes, content_type: str | None) -> None:
         self.puts.append((key, data, content_type))
+
+    async def presigned_get(self, key: str, ttl) -> str:
+        return f"https://signed.example/{key}"
 
 
 def _fake_request(storage: _SpyStorage):
@@ -238,8 +242,18 @@ async def test_list_bills_shows_extracted_and_is_tenant_scoped(db_session: Async
     a_bill = await _extracted(a)
     b_bill = await _extracted(b)
 
-    page = await list_bills(user=a_user, db=db_session, limit=50, offset=0)
+    page = await list_bills(
+        request=_fake_request(_SpyStorage()),
+        user=a_user,
+        db=db_session,
+        settings=_settings(),
+        limit=50,
+        offset=0,
+    )
     ids = {item.id for item in page.items}
     assert a_bill in ids
     assert b_bill not in ids  # the Wall: B's bill never shows for A
     assert page.total == 1
+    # Each item carries a presigned thumbnail URL of the scan (Phase 10), built
+    # from the tenant-prefixed key — the list shows the photo, not just metadata.
+    assert all(item.image_url and f"bills/{a.tenant_id}/" in item.image_url for item in page.items)

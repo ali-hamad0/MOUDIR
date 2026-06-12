@@ -27,8 +27,14 @@ from app.agents.inventory.tools import (
     check_stock,
     draft_purchase_order,
     forecast_demand,
+    parse_adjustment,
 )
 from app.agents.llm.router import LLMRouter
+
+# The order flow's code-side Arabic matcher, reused so the same phrase matches the
+# same product whether a customer orders it or the owner restocks it. The LLM never
+# picks a product id in either flow.
+from app.agents.order.tools import CatalogItem, _match_phrase_to_catalog
 from app.db.models import Inventory
 from app.infra.logging import get_logger
 from app.infra.settings import Settings
@@ -36,6 +42,8 @@ from app.ml.predictors import DemandPredictor, StubDemandPredictor
 from app.repositories.inventory import InventoryRepository
 from app.repositories.products import ProductRepository
 from app.repositories.training_data import TrainingDataRepository
+from app.services.audit import AuditService
+from prompts import inventory_ar
 
 log = get_logger(__name__)
 
@@ -155,6 +163,141 @@ class InventoryAgent:
             if po_id is not None:
                 await session.commit()
             return po_id
+
+    async def propose_adjustment(
+        self, message: str, tenant_id: UUID
+    ) -> tuple[str, dict | None] | None:
+        """Parse an owner stock-edit request and build the confirmation step.
+
+        Returns None when the message is not a stock edit (the caller falls back
+        to the read-only status path). Otherwise returns (reply, pending):
+        - a parsed + matched edit → the «نعم/لا» confirmation question and a
+          JSON-safe pending dict the supervisor keeps in checkpointed state;
+        - an unmatched product or an impossible subtract → an error reply with
+          pending=None (nothing to confirm, nothing written).
+
+        Nothing is written here — the write happens only in apply_adjustment,
+        after the owner confirms (the same human-gate discipline as the PO flow).
+        """
+        async with self._sessionmaker() as session:
+            ctx = ToolContext(
+                session=session,
+                tenant_id=tenant_id,
+                router=self._router,
+                settings=self._settings,
+            )
+            raw = await parse_adjustment(ctx, message)
+            if raw is None:
+                return None
+
+            products = await ProductRepository(session).list(tenant_id)
+            catalog = [CatalogItem(id=p.id, name_ar=p.name_ar, is_available=True) for p in products]
+            match = _match_phrase_to_catalog(raw.product_phrase, catalog)
+            if match is None:
+                log.info(
+                    "inventory_agent.adjust.unmatched",
+                    tenant_id=str(tenant_id),
+                )
+                reply = inventory_ar.ADJUST_PRODUCT_NOT_FOUND.format(phrase=raw.product_phrase)
+                return reply, None
+
+            row = await InventoryRepository(session).get_by_product(tenant_id, match.id)
+            old = row.quantity if row is not None else 0
+
+        if raw.action == "add":
+            new = old + raw.quantity
+        elif raw.action == "subtract":
+            if raw.quantity > old:
+                reply = inventory_ar.ADJUST_INSUFFICIENT.format(
+                    amount=raw.quantity, product_name=match.name_ar, old=old
+                )
+                return reply, None
+            new = old - raw.quantity
+        else:  # set
+            new = raw.quantity
+
+        pending = {
+            # All primitives — this dict lives in the supervisor's checkpointed
+            # state (Postgres JSON), so no UUID/ORM objects.
+            "product_id": str(match.id),
+            "product_name": match.name_ar,
+            "action": raw.action,
+            "amount": raw.quantity,
+            "old_quantity": old,
+            "new_quantity": new,
+        }
+        log.info(
+            "inventory_agent.adjust.proposed",
+            tenant_id=str(tenant_id),
+            product_id=str(match.id),
+            action=raw.action,
+            amount=raw.quantity,
+        )
+        reply = inventory_ar.ADJUST_CONFIRM.format(product_name=match.name_ar, old=old, new=new)
+        rail = check_output(reply, "inventory")
+        return (rail.text or reply), pending
+
+    async def apply_adjustment(self, tenant_id: UUID, pending: dict) -> str:
+        """Apply a confirmed stock edit, atomically, then audit and commit.
+
+        `pending` is the dict propose_adjustment built. add/subtract apply as
+        atomic deltas against the CURRENT quantity (stock may have moved between
+        propose and confirm — e.g. an order deducted units); `set` is absolute.
+        A subtract that no longer fits returns the insufficient reply and writes
+        nothing. Audited as `inventory.adjusted` — the same action the dashboard
+        edit writes (actor_id is None: the supervisor is actor-blind by design;
+        the owner's phone identity is already in the webhook log line).
+        """
+        product_id = UUID(pending["product_id"])
+        action: str = pending["action"]
+        amount: int = pending["amount"]
+        async with self._sessionmaker() as session:
+            repo = InventoryRepository(session)
+            await repo.ensure_row(tenant_id, product_id)
+            if action == "add":
+                ok = await repo.increase(tenant_id, product_id, amount)
+            elif action == "subtract":
+                ok = await repo.deduct(tenant_id, product_id, amount)
+            else:  # set
+                ok = await repo.set_quantity(tenant_id, product_id, amount)
+
+            if not ok:
+                # Only the guarded deduct can miss: stock moved below the amount
+                # between propose and confirm. Nothing was written.
+                await session.rollback()
+                row = await repo.get_by_product(tenant_id, product_id)
+                old = row.quantity if row is not None else 0
+                log.info(
+                    "inventory_agent.adjust.insufficient",
+                    tenant_id=str(tenant_id),
+                    product_id=str(product_id),
+                )
+                return inventory_ar.ADJUST_INSUFFICIENT.format(
+                    amount=amount, product_name=pending["product_name"], old=old
+                )
+
+            row = await repo.get_by_product(tenant_id, product_id)
+            new_quantity = row.quantity if row is not None else amount
+            await AuditService(session).record(
+                tenant_id=tenant_id,
+                actor_id=None,
+                action="inventory.adjusted",
+                target=f"{product_id} whatsapp {action} {amount}",
+            )
+            await session.commit()
+        log.info(
+            "inventory_agent.adjust.applied",
+            tenant_id=str(tenant_id),
+            product_id=str(product_id),
+            action=action,
+            amount=amount,
+            new_quantity=new_quantity,
+        )
+        reply = inventory_ar.ADJUST_APPLIED.format(
+            product_name=pending["product_name"], new=new_quantity
+        )
+        rail = check_output(reply, "inventory")
+        return rail.text or reply
 
     async def handle(self, question: str, tenant_id: UUID) -> str:
         """Answer an owner's inventory question. Returns Lebanese Arabic summary.

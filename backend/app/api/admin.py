@@ -13,6 +13,17 @@ from app.api.schemas.admin_requests import (
     RejectRequest,
     SignupRequestAdminView,
 )
+from app.api.schemas.admin_tenants import (
+    PaymentRecordRequest,
+    PaymentRecordResponse,
+    PaymentView,
+    PlanChangeRequest,
+    SubscriptionOverrideRequest,
+    TenantActionRequest,
+    TenantActionResponse,
+    TenantAdminView,
+    TenantDetailAdminView,
+)
 from app.db.models import Admin
 from app.db.session import get_db_session
 from app.infra.email import EmailSender
@@ -22,8 +33,15 @@ from app.infra.settings import Settings, get_settings
 from app.repositories.admins import AdminRepository
 from app.repositories.agent_runs import AgentRunRepository
 from app.repositories.business_policies import BusinessPolicyRepository
+from app.repositories.customers import CustomerRepository
+from app.repositories.orders import OrderRepository
 from app.repositories.signup_requests import SignupRequestRepository
+from app.repositories.subscription_payments import SubscriptionPaymentRepository
+from app.repositories.tenants import TenantRepository
+from app.services.billing import override_subscription, record_payment, set_plan
+from app.services.cost_dashboard import build_daily_costs
 from app.services.onboarding import approve_request, reject_request
+from app.services.tenant_admin import set_tenant_active
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 log = get_logger(__name__)
@@ -166,3 +184,132 @@ async def get_costs_summary(
         "percentage": percentage,
         "alert_triggered": alert_triggered,
     }
+
+
+# ── Tenant directory (founder-only) ──────────────────────────────────────────
+# The one deliberate above-tenant read surface: a platform founder listing the
+# businesses on their own platform. Reachable only behind get_current_admin,
+# and every access is logged (the brief's audit rule for cross-business reads).
+
+
+@router.get("/tenants", response_model=list[TenantAdminView])
+async def list_tenants(_admin: CurrentAdmin, db: Db) -> list[TenantAdminView]:
+    """Founder-only: the tenant directory — every business on the platform."""
+    rows = await TenantRepository(db).list_all()
+    log.info("admin.tenants.listed", count=len(rows))
+    return [TenantAdminView.model_validate(r) for r in rows]
+
+
+@router.get("/tenants/{tenant_id}", response_model=TenantDetailAdminView)
+async def get_tenant_detail(tenant_id: UUID, _admin: CurrentAdmin, db: Db) -> TenantDetailAdminView:
+    """Founder-only: one tenant with activity counts. Counts are tenant-scoped
+    repository reads — the Wall holds even on the founder surface."""
+    tenant = await TenantRepository(db).get_by_id(tenant_id)
+    if tenant is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tenant not found")
+
+    customers_count = await CustomerRepository(db).count(tenant_id)
+    orders_today = await OrderRepository(db).count_today(tenant_id)
+    log.info("admin.tenant.viewed", tenant_id=str(tenant_id))
+    return TenantDetailAdminView(
+        **TenantAdminView.model_validate(tenant).model_dump(),
+        customers_count=customers_count,
+        orders_today=orders_today,
+    )
+
+
+@router.get("/tenants/{tenant_id}/costs")
+async def get_tenant_costs_dashboard(tenant_id: UUID, _admin: CurrentAdmin, db: Db) -> dict:
+    """Founder-only: 30-day daily cost data for one tenant, in the exact shape
+    of the owner's GET /dashboard/costs so the frontend reuses the same chart."""
+    tenant = await TenantRepository(db).get_by_id(tenant_id)
+    if tenant is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tenant not found")
+    log.info("admin.tenant.costs.viewed", tenant_id=str(tenant_id))
+    return await build_daily_costs(db, tenant_id)
+
+
+@router.post("/tenants/{tenant_id}/suspend", response_model=TenantActionResponse)
+async def suspend_tenant(
+    tenant_id: UUID, payload: TenantActionRequest, admin: CurrentAdmin, db: Db
+) -> TenantActionResponse:
+    """Founder-only: suspend a tenant. Cuts dashboard login AND WhatsApp routing
+    immediately (is_active is checked at every tenant load). Audited with reason."""
+    tenant = await set_tenant_active(
+        db, admin=admin, tenant_id=tenant_id, active=False, reason=payload.reason
+    )
+    return TenantActionResponse(id=tenant.id, is_active=tenant.is_active)
+
+
+@router.post("/tenants/{tenant_id}/reactivate", response_model=TenantActionResponse)
+async def reactivate_tenant(
+    tenant_id: UUID, payload: TenantActionRequest, admin: CurrentAdmin, db: Db
+) -> TenantActionResponse:
+    """Founder-only: reactivate a suspended tenant. Audited with reason."""
+    tenant = await set_tenant_active(
+        db, admin=admin, tenant_id=tenant_id, active=True, reason=payload.reason
+    )
+    return TenantActionResponse(id=tenant.id, is_active=tenant.is_active)
+
+
+# ── Billing (founder-only, manual payments) ──────────────────────────────────
+
+
+@router.post("/tenants/{tenant_id}/plan", response_model=TenantAdminView)
+async def change_tenant_plan(
+    tenant_id: UUID, payload: PlanChangeRequest, admin: CurrentAdmin, db: Db
+) -> TenantAdminView:
+    """Founder-only: change a tenant's plan tier without a payment. Audited."""
+    tenant = await set_plan(db, admin=admin, tenant_id=tenant_id, plan_tier=payload.plan_tier)
+    return TenantAdminView.model_validate(tenant)
+
+
+@router.put("/tenants/{tenant_id}/subscription", response_model=TenantAdminView)
+async def override_tenant_subscription(
+    tenant_id: UUID, payload: SubscriptionOverrideRequest, admin: CurrentAdmin, db: Db
+) -> TenantAdminView:
+    """Founder-only: set the subscription state directly — fix a wrong entry,
+    grant a custom period, or reset (free + no period). Audited before → after."""
+    tenant = await override_subscription(
+        db,
+        admin=admin,
+        tenant_id=tenant_id,
+        plan_tier=payload.plan_tier,
+        current_period_end=payload.current_period_end,
+    )
+    return TenantAdminView.model_validate(tenant)
+
+
+@router.post("/tenants/{tenant_id}/payments", response_model=PaymentRecordResponse)
+async def record_tenant_payment(
+    tenant_id: UUID, payload: PaymentRecordRequest, admin: CurrentAdmin, db: Db
+) -> PaymentRecordResponse:
+    """Founder-only: record an out-of-band payment (Whish/OMT/cash/card) and
+    extend the tenant's paid period. Audited with amount, method and new end."""
+    tenant, payment = await record_payment(
+        db,
+        admin=admin,
+        tenant_id=tenant_id,
+        amount_usd=payload.amount_usd,
+        method=payload.method,
+        months=payload.months,
+        note=payload.note,
+        plan_tier=payload.plan_tier,
+    )
+    return PaymentRecordResponse(
+        payment=PaymentView.model_validate(payment),
+        plan_tier=tenant.plan_tier,
+        subscription_status=tenant.subscription_status,
+        current_period_end=tenant.current_period_end,  # set by record_payment
+    )
+
+
+@router.get("/tenants/{tenant_id}/payments", response_model=list[PaymentView])
+async def list_tenant_payments(tenant_id: UUID, admin: CurrentAdmin, db: Db) -> list[PaymentView]:
+    """Founder-only: a tenant's payment history, most recent first."""
+    tenant = await TenantRepository(db).get_by_id(tenant_id)
+    if tenant is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tenant not found")
+    rows = await SubscriptionPaymentRepository(db).list_for_tenant(tenant_id)
+    log.info("admin.tenant.payments.listed", tenant_id=str(tenant_id), count=len(rows))
+    return [PaymentView.model_validate(r) for r in rows]

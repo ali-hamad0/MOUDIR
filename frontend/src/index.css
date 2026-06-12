@@ -42,6 +42,20 @@ body {
   font-family: "Cairo", "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   min-height: 100dvh; /* dvh, not vh — correct on mobile address-bar resize */
+  /* Our buttons provide their own press feedback (active: states), so the
+     default gray tap flash on Android/iOS just adds visual noise. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Remove the double-tap-to-zoom delay on taps (ux tap-delay) while keeping
+   pinch-zoom available on the page itself. */
+button,
+a,
+input,
+select,
+textarea,
+[role="button"] {
+  touch-action: manipulation;
 }
 
 /* Money/quantities: tabular figures so numeric columns don't jitter. */

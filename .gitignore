@@ -41,3 +41,6 @@ backend/ml_export/
 # Phase 8 backup archives — not versioned; .gitkeep files mark the directories
 backups/postgres/*.sql.gz
 backups/minio/*/
+
+# Ad-hoc webhook test payloads (manual curl testing) — never commit
+/test_*.json

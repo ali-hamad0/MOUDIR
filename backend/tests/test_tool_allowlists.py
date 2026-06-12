@@ -225,7 +225,19 @@ def test_inventory_agent_has_no_forbidden_nodes():
 # ── OwnerSupervisor ────────────────────────────────────────────────────────────
 
 _SUPERVISOR_ALLOWED = frozenset(
-    {"route", "order", "inventory", "finance", "customer", "advisor", "respond"}
+    {
+        "route",
+        "order",
+        "inventory",
+        "finance",
+        "customer",
+        "advisor",
+        # Phase 10: the confirmed/cancelled stock-edit steps. Only reachable from
+        # route when a pending_adjustment sits in state — owner path only.
+        "apply_adjustment",
+        "cancel_adjustment",
+        "respond",
+    }
 )
 
 

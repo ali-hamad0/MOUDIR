@@ -34,7 +34,13 @@ export default function BillsPage() {
       setToast({ kind: "success", message: t.billUploaded });
       refetch();
     } catch (e) {
-      const msg = e instanceof ApiError && e.status === 0 ? t.networkError : t.billUploadError;
+      // 402 = the Free monthly bill quota (plan_gate) — nudge toward Pro.
+      const msg =
+        e instanceof ApiError && e.status === 402
+          ? t.limitBillsMsg
+          : e instanceof ApiError && e.status === 0
+            ? t.networkError
+            : t.billUploadError;
       setToast({ kind: "error", message: msg });
     } finally {
       setUploading(false);
@@ -104,7 +110,17 @@ function BillCard({ bill }: { bill: BillRead }) {
   const body = (
     <>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        {/* Thumbnail of the scan itself — the owner sees WHICH receipt this is
+            without opening the review screen. */}
+        {bill.image_url && (
+          <img
+            src={bill.image_url}
+            alt={t.billImageAlt}
+            loading="lazy"
+            className="h-16 w-16 shrink-0 rounded-lg border border-border bg-muted object-cover"
+          />
+        )}
+        <div className="min-w-0 flex-1">
           <p className="truncate font-semibold text-foreground">
             {bill.supplier_name || t.billNoSupplier}
           </p>

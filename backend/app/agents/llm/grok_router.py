@@ -36,5 +36,8 @@ class GrokRouter:
     def tier1(self) -> BaseChatModel:
         return self._build(self._settings.grok_tier1_model)
 
+    def tier1_json(self) -> BaseChatModel:
+        return self.tier1()
+
     def tier2(self) -> BaseChatModel:
         return self._build(self._settings.grok_tier2_model)

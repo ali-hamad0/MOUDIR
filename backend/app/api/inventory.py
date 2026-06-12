@@ -24,18 +24,26 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 Db = Annotated[AsyncSession, Depends(get_db_session)]
 
 
-def _to_read(inventory: Inventory, product: Product) -> InventoryRead:
-    """Map a joined (inventory, product) pair to the read model, computing the
-    low-stock flag server-side."""
+def _to_read(product: Product, inventory: Inventory | None) -> InventoryRead:
+    """Map a (product, inventory | None) pair to the read model.
+
+    inventory is None for products that have never had their stock set — they
+    appear in the list with quantity 0 and no thresholds so the owner can edit
+    them without first having to do anything special.
+    """
+    qty = inventory.quantity if inventory is not None else 0
+    threshold = inventory.reorder_threshold if inventory is not None else None
+    reorder_qty = inventory.reorder_quantity if inventory is not None else None
+    supplier_id = inventory.supplier_id if inventory is not None else None
     return InventoryRead(
         product_id=product.id,
         name_ar=product.name_ar,
         name_en=product.name_en,
-        quantity=inventory.quantity,
-        reorder_threshold=inventory.reorder_threshold,
-        reorder_quantity=inventory.reorder_quantity,
-        supplier_id=inventory.supplier_id,
-        is_low=is_low(inventory.quantity, inventory.reorder_threshold),
+        quantity=qty,
+        reorder_threshold=threshold,
+        reorder_quantity=reorder_qty,
+        supplier_id=supplier_id,
+        is_low=is_low(qty, threshold),
     )
 
 
@@ -52,7 +60,7 @@ async def list_inventory(
     total, rows = await InventoryService(db).list_inventory(
         tenant_id=user.tenant_id, limit=limit, offset=offset
     )
-    items = [_to_read(inventory, product) for inventory, product in rows]
+    items = [_to_read(product, inventory) for product, inventory in rows]
     return InventoryPage(items=items, total=total, limit=limit, offset=offset)
 
 
@@ -66,7 +74,7 @@ async def upsert_inventory(
     row, product = await InventoryService(db).upsert_inventory(
         tenant_id=user.tenant_id, actor_id=user.id, product_id=product_id, data=payload
     )
-    return _to_read(row, product)
+    return _to_read(product, row)
 
 
 @router.get("/suppliers", response_model=list[SupplierRead])

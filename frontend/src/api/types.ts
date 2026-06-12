@@ -23,6 +23,19 @@ export interface Me {
   plan_tier: string;
   product_count: number;
   setup_complete: boolean;
+  // Billing (Phase 11): derived server-side status + paid-through date, and
+  // how to pay (empty string = hide the corresponding action).
+  subscription_status: string;
+  current_period_end: string | null;
+  billing_whish_link: string;
+  billing_contact_phone: string;
+  // What the tenant actually gets right now ("pro" only while paid). The
+  // backend enforces; this drives the locks/CTAs.
+  effective_plan: string;
+  pro_price_usd: number;
+  // True when the in-app Whish checkout is configured; false → the subscribe
+  // button links to billing_whish_link and activation is manual (founder).
+  online_checkout_enabled: boolean;
 }
 
 // ---- Orders feed (mirrors app/api/schemas/orders.py) ----
@@ -144,6 +157,8 @@ export interface BillRead {
   reviewed_at: string | null;
   committed_at: string | null;
   created_at: string;
+  // Presigned thumbnail of the scan (time-boxed) — lets the list show the photo.
+  image_url: string | null;
 }
 
 export interface BillsPage {
@@ -236,6 +251,33 @@ export interface ProductWrite {
 
 export interface ProductResponse extends ProductWrite {
   id: string;
+}
+
+// GET /profile — full profile as stored on the server
+export interface ProfileRead {
+  business_name: string | null;
+  description: string | null;
+  location: string | null;
+  delivery_radius_km: number | null;
+  accepts_delivery: boolean;
+  accepts_pickup: boolean;
+  logo_url: string | null;
+  tenant_id: string;
+}
+
+// GET /operating-hours — times arrive as "HH:MM:SS" from the backend
+export interface OperatingHoursRead {
+  day_of_week: number;
+  open_time: string | null;
+  close_time: string | null;
+  is_closed: boolean;
+  note_ar: string | null;
+}
+
+// GET /policies
+export interface PolicyRead {
+  key: string;
+  value: string | null;
 }
 
 // PUT /operating-hours  (OperatingHoursReplace). Times are "HH:MM" or null.

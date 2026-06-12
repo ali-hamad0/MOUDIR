@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -17,6 +17,8 @@ from app.api.schemas.profile import (
 )
 from app.db.models import User
 from app.db.session import get_db_session
+from app.repositories.products import ProductRepository
+from app.services.plan_gate import FREE_MAX_PRODUCTS, require_within_limit
 from app.services.profile import ProfileService
 
 router = APIRouter(tags=["profile"])
@@ -25,6 +27,14 @@ router = APIRouter(tags=["profile"])
 # user's JWT, never from the request body. The Wall holds here.
 CurrentUser = Annotated[User, Depends(get_current_user)]
 Db = Annotated[AsyncSession, Depends(get_db_session)]
+
+
+@router.get("/profile", response_model=ProfileResponse)
+async def get_profile(user: CurrentUser, db: Db) -> ProfileResponse:
+    profile = await ProfileService(db).get_profile(tenant_id=user.tenant_id)
+    if profile is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Profile not set yet")
+    return ProfileResponse.model_validate(profile)
 
 
 @router.put("/profile", response_model=ProfileResponse)
@@ -46,6 +56,9 @@ async def list_products(user: CurrentUser, db: Db) -> list[ProductResponse]:
 
 @router.post("/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 async def create_product(payload: ProductWrite, user: CurrentUser, db: Db) -> ProductResponse:
+    # Free plan: catalog capped (plan_gate) — Pro is unlimited.
+    current = await ProductRepository(db).count(user.tenant_id)
+    await require_within_limit(db, user.tenant_id, "products", current, FREE_MAX_PRODUCTS)
     product = await ProfileService(db).create_product(
         tenant_id=user.tenant_id, actor_id=user.id, data=payload
     )
@@ -69,6 +82,12 @@ async def delete_product(product_id: UUID, user: CurrentUser, db: Db) -> None:
     )
 
 
+@router.get("/operating-hours", response_model=list[DayHoursResponse])
+async def get_hours(user: CurrentUser, db: Db) -> list[DayHoursResponse]:
+    rows = await ProfileService(db).get_hours(tenant_id=user.tenant_id)
+    return [DayHoursResponse.model_validate(r) for r in rows]
+
+
 @router.put("/operating-hours", response_model=list[DayHoursResponse])
 async def replace_hours(
     payload: OperatingHoursReplace, user: CurrentUser, db: Db
@@ -77,6 +96,12 @@ async def replace_hours(
         tenant_id=user.tenant_id, actor_id=user.id, data=payload
     )
     return [DayHoursResponse.model_validate(r) for r in rows]
+
+
+@router.get("/policies", response_model=list[PolicyResponse])
+async def get_policies(user: CurrentUser, db: Db) -> list[PolicyResponse]:
+    rows = await ProfileService(db).get_policies(tenant_id=user.tenant_id)
+    return [PolicyResponse.model_validate(r) for r in rows]
 
 
 @router.put("/policies", response_model=list[PolicyResponse])

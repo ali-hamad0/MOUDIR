@@ -20,9 +20,10 @@ class BillRead(BaseModel):
     """One supplier bill for the review list, joined to its supplier (if mapped).
 
     Carries the lifecycle status and the review signals (date, total, currency,
-    min_confidence) so the dashboard can show what needs attention. The image bytes
-    live in MinIO; this read model carries only the reference fields, not the image
-    (the side-by-side image URL is the bill-detail endpoint, Task 5.12).
+    min_confidence) so the dashboard can show what needs attention. The image
+    bytes live in MinIO; `image_url` is a time-boxed presigned THUMBNAIL link so
+    the list shows the scan itself (Phase 10) — the full side-by-side review is
+    still the bill-detail endpoint (Task 5.12).
     """
 
     id: UUID
@@ -38,6 +39,7 @@ class BillRead(BaseModel):
     reviewed_at: datetime | None = None
     committed_at: datetime | None = None
     created_at: datetime
+    image_url: str | None = None
 
 
 class BillsPage(BaseModel):

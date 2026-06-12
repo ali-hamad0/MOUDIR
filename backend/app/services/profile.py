@@ -18,6 +18,7 @@ from app.db.models import (
 )
 from app.repositories.business_policies import BusinessPolicyRepository
 from app.repositories.business_profile import BusinessProfileRepository
+from app.repositories.inventory import InventoryRepository
 from app.repositories.knowledge_base_docs import KnowledgeBaseDocRepository
 from app.repositories.operating_hours import OperatingHoursRepository
 from app.repositories.products import ProductRepository
@@ -49,6 +50,9 @@ class ProfileService:
         )
 
     # ---- Profile ----
+    async def get_profile(self, *, tenant_id: UUID) -> BusinessProfile | None:
+        return await BusinessProfileRepository(self._session).get_for_tenant(tenant_id)
+
     async def upsert_profile(
         self, *, tenant_id: UUID, actor_id: UUID, data: ProfileUpsert
     ) -> BusinessProfile:
@@ -76,6 +80,11 @@ class ProfileService:
         )
         await self._track_product(tenant_id, product)
         await self._audit(tenant_id, actor_id, "product.created", str(product.id))
+        # Always seed an inventory row at qty 0 so the product appears in the
+        # inventory list immediately — the owner can set the real quantity from
+        # the inventory page. Uses INSERT … ON CONFLICT DO NOTHING so it's safe
+        # if called twice (idempotent).
+        await InventoryRepository(self._session).ensure_row(tenant_id, product.id)
         await self._session.commit()
         return product
 
@@ -122,6 +131,9 @@ class ProfileService:
         )
 
     # ---- Operating hours (replace whole week) ----
+    async def get_hours(self, *, tenant_id: UUID) -> list[OperatingHours]:
+        return list(await OperatingHoursRepository(self._session).list(tenant_id))
+
     async def replace_hours(
         self, *, tenant_id: UUID, actor_id: UUID, data: OperatingHoursReplace
     ) -> list[OperatingHours]:
@@ -150,6 +162,9 @@ class ProfileService:
         return result
 
     # ---- Policies (upsert key/value) ----
+    async def get_policies(self, *, tenant_id: UUID) -> list[BusinessPolicy]:
+        return list(await BusinessPolicyRepository(self._session).list(tenant_id))
+
     async def upsert_policies(
         self, *, tenant_id: UUID, actor_id: UUID, data: PoliciesUpsert
     ) -> list[BusinessPolicy]:

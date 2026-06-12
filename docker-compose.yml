@@ -101,28 +101,32 @@ services:
       vault:
         condition: service_healthy
     restart: "no"
+    # All $$ are deliberate: the variables expand IN THE CONTAINER at run time,
+    # fed by env_file (.vault_secrets.env). A single $ would make compose
+    # interpolate from the HOST at parse time — silently substituting the
+    # placeholder defaults and CLOBBERING real secrets on every seed re-run.
     entrypoint:
       - sh
       - -c
       - |
         OCR_JSON="$$(cat /vault/secrets/service_account.json 2>/dev/null || echo '{}')"
         vault kv put secret/modir/llm \
-          gemini_api_key="${GEMINI_API_KEY:-placeholder-rotate-before-prod}" \
-          langsmith_api_key="${LANGSMITH_API_KEY:-dev-langsmith-key-rotate-before-prod}" \
-          grok_api_key="${GROK_API_KEY:-}" \
-          anthropic_api_key="${ANTHROPIC_API_KEY:-}" &&
+          gemini_api_key="$${GEMINI_API_KEY:-placeholder-rotate-before-prod}" \
+          langsmith_api_key="$${LANGSMITH_API_KEY:-dev-langsmith-key-rotate-before-prod}" \
+          grok_api_key="$${GROK_API_KEY:-}" \
+          anthropic_api_key="$${ANTHROPIC_API_KEY:-}" &&
         vault kv put secret/modir/minio \
-          access_key="${MINIO_ACCESS_KEY:-modir-access}" \
-          secret_key="${MINIO_SECRET_KEY:-modir-secret-changeme}" &&
+          access_key="$${MINIO_ACCESS_KEY:-modir-access}" \
+          secret_key="$${MINIO_SECRET_KEY:-modir-secret-changeme}" &&
         vault kv put secret/modir/auth \
-          jwt_secret="${JWT_SECRET:-dev-jwt-secret-rotate-before-prod}" &&
+          jwt_secret="$${JWT_SECRET:-dev-jwt-secret-rotate-before-prod}" &&
         vault kv put secret/modir/mail \
-          api_key="${MAIL_API_KEY:-dev-mail-key-rotate-before-prod}" &&
+          api_key="$${MAIL_API_KEY:-dev-mail-key-rotate-before-prod}" &&
         vault kv put secret/modir/ocr \
           service_account_json="$$OCR_JSON" &&
         vault kv put secret/modir/whatsapp \
-          api_token="${WHATSAPP_API_TOKEN:-dev-whatsapp-token-placeholder}" \
-          verify_token="${WHATSAPP_VERIFY_TOKEN:-dev-verify-token-changeme}"
+          api_token="$${WHATSAPP_API_TOKEN:-dev-whatsapp-token-placeholder}" \
+          verify_token="$${WHATSAPP_VERIFY_TOKEN:-dev-verify-token-changeme}"
 
   migrate:
     build:

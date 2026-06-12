@@ -11,6 +11,7 @@ import {
   InventoryIcon,
   OrdersIcon,
   SetupIcon,
+  StarIcon,
 } from "./components/icons";
 import { t } from "./i18n";
 
@@ -32,12 +33,18 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/insights", label: t.navInsights, Icon: InsightsIcon },
   { to: "/costs", label: t.navCosts, Icon: CostIcon },
   { to: "/setup", label: t.navSetup, Icon: SetupIcon },
+  { to: "/upgrade", label: t.navUpgrade, Icon: StarIcon },
 ];
 
-// Mobile bottom nav stays ≤5 items (ux bottom-nav-limit). The full sidebar has nine
-// destinations, so the bar keeps the five most day-to-day ones and drops Setup (a
-// one-time wizard), Customers, Bills, and Insights — all four stay in the desktop sidebar.
-const _BOTTOM_NAV_EXCLUDE = new Set(["/setup", "/customers", "/bills", "/insights", "/costs"]);
-export const BOTTOM_NAV_ITEMS: NavItem[] = NAV_ITEMS.filter(
-  (item) => !_BOTTOM_NAV_EXCLUDE.has(item.to),
+// Mobile bottom nav stays ≤5 items (ux bottom-nav-limit): the four most
+// day-to-day destinations get a slot, and the fifth slot is the "More" sheet
+// (rendered by AppShell) holding everything else — so every sidebar page stays
+// reachable on a phone (ux persistent-nav). New NAV_ITEMS entries land in the
+// sheet automatically.
+const _BOTTOM_NAV_QUICK = new Set(["/", "/chat", "/orders", "/inventory"]);
+export const BOTTOM_NAV_ITEMS: NavItem[] = NAV_ITEMS.filter((item) =>
+  _BOTTOM_NAV_QUICK.has(item.to),
+);
+export const BOTTOM_NAV_MORE_ITEMS: NavItem[] = NAV_ITEMS.filter(
+  (item) => !_BOTTOM_NAV_QUICK.has(item.to),
 );

@@ -34,5 +34,8 @@ class AnthropicRouter:
     def tier1(self) -> BaseChatModel:
         return self._build(self._settings.anthropic_tier1_model)
 
+    def tier1_json(self) -> BaseChatModel:
+        return self.tier1()
+
     def tier2(self) -> BaseChatModel:
         return self._build(self._settings.anthropic_tier2_model)
