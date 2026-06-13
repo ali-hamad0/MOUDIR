@@ -31,7 +31,8 @@ dependencies = [
     "aiosmtplib>=5.1.1",
     "minio>=7.2.0",          # Phase 5 — supplier-bill image storage (MinIO/S3)
     "google-cloud-vision>=3.7.0",  # Phase 5 — OCR engine (Lebanese-Arabic bills)
-    "pillow>=11.0.0",        # Phase 5 — bill image preprocessing (deskew/denoise/contrast)
+    "opencv-python-headless>=4.10.0",  # Phase 5 — bill image preprocessing (grayscale/CLAHE/denoise/deskew); headless = no GUI/X11 deps
+    "pillow>=11.0.0",        # Phase 5 — image decoding for OCR fixtures/tests and inline-media helpers
     # Phase 6 — The ML Layer. ML predicts (Constitution IV), never an LLM prompt.
     # Pinned floors; trained pipelines live in app/ml/ and load once via lifespan.
     # numpy was already a transitive dep (app/infra/embeddings.py) — declared here

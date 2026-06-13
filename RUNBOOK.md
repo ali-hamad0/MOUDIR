@@ -21,14 +21,19 @@ docker compose ps vault                        # Check health status
 
 **Recovery**
 ```bash
-# Restart Vault (dev mode — data is in-memory, must re-seed secrets)
-docker compose restart vault
-docker compose run --rm vault-seed             # Re-inject all secrets
+# Vault uses persistent file storage — secrets SURVIVE restarts. After a
+# restart Vault comes back SEALED; vault-init unseals it automatically using
+# secrets/vault-init.txt:
+docker compose up -d                           # restarts vault + runs vault-init
 docker compose restart api worker              # Now Vault is healthy
+
+# If vault-init can't find secrets/vault-init.txt, unseal by hand:
+docker compose exec vault vault operator unseal <unseal-key>
 ```
 
-> **Note:** In Vault dev mode all secrets are lost on container restart.
-> Production Vault (integrated storage / Raft) survives restarts without re-seeding.
+> **Note:** Secrets persist in the `vault_data` volume. Only `docker volume rm`
+> (or `docker compose down -v`) wipes them — after that, vault-init re-initializes
+> and you must re-seed once: `docker compose --profile seed run --rm vault-seed`.
 
 ---
 
@@ -50,8 +55,9 @@ Check the provider API keys are valid (Gemini quota, Grok/Anthropic billing).
 
 **Recovery**
 ```bash
-# Re-seed corrected API keys into Vault
-GEMINI_API_KEY=<new-key> docker compose run --rm vault-seed
+# Update the key directly in Vault (persists — no re-seed needed):
+docker compose exec vault sh -c \
+  'VAULT_TOKEN=root vault kv patch secret/modir/llm gemini_api_key=<new-key>'
 
 # The circuit breaker resets automatically 60 seconds after the last failure.
 # Or restart the api to reset immediately:

@@ -515,7 +515,7 @@ Modir solves this with an **OCR pipeline** that turns paper bills into structure
         ↓
 3. OCR — TEXT EXTRACTION
    Extract raw text from the image
-   (Tesseract / EasyOCR / cloud OCR)
+   (Google Cloud Vision / Gemini Vision — cloud OCR)
    Supports Arabic and English / French text
         ↓
 4. STRUCTURED EXTRACTION
@@ -770,7 +770,7 @@ This is every day. Abu Khaled never opens a spreadsheet. He never counts his sto
 | LLM (fallback) | xAI Grok |
 | LLM (emergency) | Anthropic Claude (Sonnet + Haiku) |
 | Provider abstraction | Custom LLM Router with adapter pattern |
-| OCR | Tesseract / EasyOCR + OpenCV preprocessing |
+| OCR | Google Cloud Vision / Gemini Vision + OpenCV preprocessing |
 | OCR structuring | LLM-assisted field extraction |
 | Database | PostgreSQL with pgvector |
 | Cache | Redis |
@@ -1590,32 +1590,29 @@ For the 2-week MVP, all three providers can be configured using free or low-cost
 
 ### Pricing Plans
 
-| Plan | Price | Target |
-|------|-------|--------|
-| **Basic** | $20/month | Single-location small shops |
-| **Growth** | $45/month | Restaurants and retail with customer focus |
-| **Pro** | $80/month | Growing SMEs with multiple locations |
+Modir ships with two plans. **Free** is a genuinely useful tier with deliberate limits so the upgrade is tangible; **Pro** removes the limits for a flat $20/month. Payment is collected through **Whish Pay** (Lebanon's local processor), with a manual-payment path for owners who settle offline.
+
+| Plan | Price | Who it's for |
+|------|-------|--------------|
+| **Free** | $0 | Trying Modir out — a single shop with light usage |
+| **Pro** | $20/month | Any shop running on Modir day to day |
 
 ### Plan Features
 
-**Basic ($20/month)**
-- Daily morning briefing
-- Inventory alerts
-- Basic chat queries
-- One location
+**Free ($0)**
+- Up to 10 products
+- 5 OCR bill scans per month
+- 15 chat messages per day
+- Order processing, inventory, and the web dashboard
+- No ML insights (demand / churn / anomaly) and no voice chat
 
-**Growth ($45/month)** — everything in Basic plus:
-- Customer intelligence and re-engagement
-- Customer-facing order bot
-- Demand forecasting
-- WhatsApp/Telegram integration
+**Pro ($20/month)** — everything in Free, with the limits removed:
+- Unlimited products, bill scans, and chat
+- ML insights: demand forecasting, churn risk, anomaly detection
+- Voice chat (Lebanese Arabic voice notes)
+- Full agent system and proactive alerts
 
-**Pro ($80/month)** — everything in Growth plus:
-- Full 5-agent system
-- Strategic advisor
-- Multi-location support
-- Priority response time
-- Custom integrations
+Enforcement lives in code (HTTP 402 at the API boundary), never in prompts — the same discipline as the Wall. An expired Pro subscription automatically falls back to Free limits, with a 7-day grace window.
 
 ### Value Justification
 

@@ -54,9 +54,16 @@ export function AppShell() {
       {/* ----- Sidebar (desktop ≥ lg) ----- */}
       <aside className="fixed inset-y-0 start-0 z-20 hidden w-64 flex-col border-e border-border bg-card px-4 py-6 lg:flex">
         <div className="mb-8 px-2">
-          <h1 className="font-sans text-2xl font-bold text-primary">
-            {t.appName}
-          </h1>
+          <div className="flex items-center gap-2">
+            <img
+              src="/logo.jpg"
+              alt={t.appName}
+              className="h-9 w-9 shrink-0 rounded-lg object-contain"
+            />
+            <h1 className="font-sans text-2xl font-bold text-primary">
+              {t.appName}
+            </h1>
+          </div>
           <p className="mt-1 text-xs text-muted-foreground">{t.tagline}</p>
         </div>
 
@@ -98,13 +105,20 @@ export function AppShell() {
 
       {/* ----- Mobile top bar (whoami + logout) ----- */}
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card px-4 py-3 lg:hidden">
-        <div className="min-w-0">
-          <h1 className="font-sans text-lg font-bold text-primary">
-            {t.appName}
-          </h1>
-          <p className="truncate text-xs text-muted-foreground">
-            {me?.business_name ?? t.tagline}
-          </p>
+        <div className="flex min-w-0 items-center gap-2">
+          <img
+            src="/logo.jpg"
+            alt={t.appName}
+            className="h-9 w-9 shrink-0 rounded-lg object-contain"
+          />
+          <div className="min-w-0">
+            <h1 className="font-sans text-lg font-bold text-primary">
+              {t.appName}
+            </h1>
+            <p className="truncate text-xs text-muted-foreground">
+              {me?.business_name ?? t.tagline}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <LangToggle className="flex h-11 items-center gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" />

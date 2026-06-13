@@ -8,8 +8,9 @@ threshold flag). Pure functions, no I/O — driven by synthetic fixtures.
 
 import io
 
+import numpy as np
 import pytest
-from PIL import Image, ImageDraw, UnidentifiedImageError
+from PIL import Image, ImageDraw
 
 from app.infra.ocr import confidence as C
 from app.infra.ocr.preprocess import _estimate_skew, preprocess
@@ -52,19 +53,19 @@ def test_preprocess_handles_color_input() -> None:
 def test_deskew_recovers_known_skew() -> None:
     """A page skewed by +6° is estimated as ~-6° (the rotation that levels it)."""
     skewed = _ruled_page().rotate(6, resample=Image.Resampling.BICUBIC, expand=True, fillcolor=255)
-    angle = _estimate_skew(skewed.convert("L"))
+    angle = _estimate_skew(np.asarray(skewed.convert("L")))
     assert angle == pytest.approx(-6.0, abs=1.0)
 
 
 def test_level_image_is_not_rotated() -> None:
     """An already-level page estimates ~0° (we don't blur a straight image)."""
-    angle = _estimate_skew(_ruled_page())
+    angle = _estimate_skew(np.asarray(_ruled_page()))
     assert angle == pytest.approx(0.0, abs=0.5)
 
 
 def test_preprocess_raises_on_garbage() -> None:
     """Non-image bytes raise (the worker maps this to ocr_failed)."""
-    with pytest.raises(UnidentifiedImageError):
+    with pytest.raises(ValueError):
         preprocess(b"not-an-image")
 
 
