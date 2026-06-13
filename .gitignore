@@ -38,6 +38,10 @@ docker-compose.override.yml
 # Phase 6 ML training-data snapshots (data, not code — exported for offline/Colab use)
 ml_export/
 backend/ml_export/
+# Phase 12 ASR — Common Voice subset exported for Colab (data, not code; app/asr/dataset.py
+# export_for_colab writes here). Same discipline as ml_export/.
+asr_export/
+backend/asr_export/
 # Phase 12 ASR — the fine-tuned Whisper artifact (~1 GB) is NOT committed (AD-12.4);
 # it is fetched out-of-repo (Release/HF/MinIO). artifacts/ holds ONLY the ignored
 # weights/processor; the dir is kept via its .gitkeep. The small model_card.json IS
