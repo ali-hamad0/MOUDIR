@@ -1,23 +1,29 @@
-"""Voice-message transcription via Gemini native audio (Phase 10, Task 10.5).
+"""Voice-message transcription behind the `transcribe_mode` seam (Phase 10 → Phase 12).
 
-Receives raw OGG bytes downloaded from Meta's media API and returns the
-Lebanese Arabic transcription as a plain string.
+Mode selection mirrors `ocr_mode` / `ml_mode`: `build_audio_transcriber(settings)` returns,
+by `settings.transcribe_mode`, one of three backends that all implement the SAME
+`async transcribe(audio_bytes, mime_type) -> str` — so no webhook/chat caller changes:
 
-Mode selection mirrors every other provider-agnostic seam in Modir:
-  "dev"  — returns the canned Arabic stub from prompts/audio_ar.py (no network,
-            no key — the CI/offline default, controlled by whatsapp_mode).
-  "live" — POSTs to the Gemini generateContent REST endpoint via httpx with
-            the audio bytes base64-encoded as inline data.
+  "dev"     — `DevAudioTranscriber`: canned Arabic stub (offline, no network/key). CI default.
+  "gemini"  — `GeminiAudioTranscriber`: the Phase-10 Gemini native-audio REST path, preserved
+              byte-for-byte. The zero-artifact LIVE fallback.
+  "whisper" — `WhisperTranscriber` (app/infra/asr/): the fine-tuned model, torch lazily
+              imported and loaded ONCE here from lifespan (AD-12.6). If the artifact is
+              absent or fails to load, this degrades to gemini (logged) — live voice never
+              crashes (the Phase-12 defend-it answer).
 
-This is the ONE place where we call the Gemini REST API directly instead of
-going through the LangChain/LLM router — LangChain's ChatGoogleGenerativeAI
-wrapper does not support inline audio bytes reliably. The deviation is
-intentional and documented in PHASE_10.md.
+The Gemini REST call is the ONE place we hit generativelanguage.googleapis.com directly
+instead of the LangChain/LLM router — LangChain's wrapper does not handle inline audio
+bytes reliably. The deviation is intentional and documented in PHASE_10.md.
+
+Privacy: audio bytes are never logged — only size + transcript length (constitution III).
 """
 
 from __future__ import annotations
 
 import base64
+from pathlib import Path
+from typing import Protocol
 
 import httpx
 
@@ -35,28 +41,39 @@ _GEMINI_GENERATE_URL = (
 _TRANSCRIPTION_MODEL = "gemini-2.5-flash"
 
 
-class AudioTranscriber:
-    """Transcribe OGG voice messages to Lebanese Arabic text."""
+class AudioTranscriber(Protocol):
+    """The transcription seam every backend implements. Callers depend on this Protocol,
+    never a concrete backend — swapping dev/gemini/whisper is a `transcribe_mode` config
+    change behind the factory, never a change in the webhook/chat handler."""
+
+    async def transcribe(
+        self, audio_bytes: bytes, mime_type: str = "audio/ogg; codecs=opus"
+    ) -> str: ...
+
+
+class DevAudioTranscriber:
+    """Canned Lebanese-Arabic stub — the offline CI/dev default. Audio bytes are ignored
+    (only their size is logged)."""
+
+    async def transcribe(
+        self, audio_bytes: bytes, mime_type: str = "audio/ogg; codecs=opus"
+    ) -> str:
+        log.info("audio.transcribe.dev_stub", bytes=len(audio_bytes))
+        return audio_ar.DEV_STUB
+
+
+class GeminiAudioTranscriber:
+    """Gemini native-audio REST path (Phase 10, Task 10.5) — behavior preserved byte-for-
+    byte from the original AudioTranscriber.live path."""
 
     def __init__(self, settings: Settings) -> None:
-        self._mode = settings.whatsapp_mode
-        # SecretStr — only unwrapped at call time
+        # SecretStr — only unwrapped at call time.
         self._settings = settings
 
     async def transcribe(
         self, audio_bytes: bytes, mime_type: str = "audio/ogg; codecs=opus"
     ) -> str:
-        """Return the Lebanese Arabic transcription of the audio.
-
-        In dev mode the audio bytes are ignored and the stub is returned.
-        In live mode the bytes are base64-encoded and sent to Gemini inline.
-        Audio content is never logged (only its size).
-        """
-        log.info("audio.transcribe.start", mode=self._mode, bytes=len(audio_bytes))
-
-        if self._mode != "live":
-            log.info("audio.transcribe.dev_stub")
-            return audio_ar.DEV_STUB
+        log.info("audio.transcribe.start", mode="gemini", bytes=len(audio_bytes))
 
         api_key = self._settings.gemini_api_key.get_secret_value()
         audio_b64 = base64.b64encode(audio_bytes).decode()
@@ -82,10 +99,7 @@ class AudioTranscriber:
             response = await client.post(url, json=body)
 
         if response.status_code != 200:
-            log.error(
-                "audio.transcribe.api_error",
-                status=response.status_code,
-            )
+            log.error("audio.transcribe.api_error", status=response.status_code)
             response.raise_for_status()
 
         data = response.json()
@@ -100,11 +114,52 @@ class AudioTranscriber:
 
 
 def build_audio_transcriber(settings: Settings) -> AudioTranscriber:
-    """Factory called once in the lifespan handler.
-
-    Mirrors build_whatsapp_client / build_ocr_engine — named factory so tests
-    can patch without importing the class directly.
+    """Factory called once in the lifespan handler. Selects the backend by
+    `transcribe_mode`. Mirrors build_ocr_engine — named factory so tests can patch and
+    so the heavy whisper backend stays behind a lazy import.
     """
-    transcriber = AudioTranscriber(settings)
-    log.info("audio.transcriber.ready", mode=settings.whatsapp_mode)
-    return transcriber
+    mode = settings.transcribe_mode
+    if mode == "whisper":
+        return _build_whisper_or_fallback(settings)
+    if mode == "gemini":
+        log.info("audio.transcriber.ready", mode=mode)
+        return GeminiAudioTranscriber(settings)
+    if mode != "dev":
+        raise ValueError(f"unknown transcribe_mode: {mode!r}")
+    log.info("audio.transcriber.ready", mode=mode)
+    return DevAudioTranscriber()
+
+
+def _build_whisper_or_fallback(settings: Settings) -> AudioTranscriber:
+    """Load the fine-tuned Whisper model ONCE. If the artifact is missing, or torch/the
+    weights fail to load, fall back to Gemini (logged) so live voice keeps working with
+    zero new artifact — the constitution's "degrade, never crash" (cf. ml_mode trained →
+    stub). The lazy import keeps torch off every other path (AD-12.6).
+    """
+    path = Path(settings.whisper_model_path)
+    if not path.exists():
+        log.warning(
+            "audio.transcriber.whisper_artifact_missing",
+            path=str(path),
+            fallback="gemini",
+        )
+        return GeminiAudioTranscriber(settings)
+    try:
+        from app.infra.asr.whisper_transcriber import WhisperTranscriber, load_whisper
+
+        model, processor = load_whisper(str(path), settings.whisper_device)
+    except Exception as exc:  # noqa: BLE001 — any load failure degrades to gemini, logged
+        log.error(
+            "audio.transcriber.whisper_load_failed",
+            error=str(exc),
+            fallback="gemini",
+        )
+        return GeminiAudioTranscriber(settings)
+
+    log.info(
+        "audio.transcriber.ready",
+        mode="whisper",
+        path=str(path),
+        device=settings.whisper_device,
+    )
+    return WhisperTranscriber(model, processor, settings.whisper_device)
