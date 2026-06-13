@@ -47,6 +47,26 @@ dependencies = [
     "redis>=5.0.0",          # Phase 8 — per-tenant rate limiting (token bucket in Redis)
 ]
 
+[project.optional-dependencies]
+# Phase 12 — Lebanese Arabic ASR (fine-tuned Whisper). QUARANTINED in an optional
+# extra, NOT the main dependency list, ON PURPOSE (AD-12.6): torch + transformers add
+# ~2 GB and must never land on the CI/dev path or in the runtime image. The default
+# `uv sync --frozen` (CI) and `uv sync --frozen --no-dev` (Dockerfile) do NOT install
+# extras, so this heavy stack stays off both. It is pulled deliberately only where it
+# is needed — `uv sync --extra asr` for local serve/eval, and the Colab notebook's own
+# pinned pip install for GPU fine-tuning (AD-12.1). These pins are the single source of
+# truth the notebook mirrors. The serve backend (Task 12.4) and the train pipeline
+# import this stack LAZILY, inside the whisper branch only.
+asr = [
+    "torch>=2.5.0",          # Whisper inference + Seq2SeqTrainer backprop (CPU serve / GPU train)
+    "transformers>=4.46.0,<5.0",  # WhisperProcessor / WhisperForConditionalGeneration / Seq2SeqTrainer (4.x recipe)
+    "datasets>=3.1.0,<4.0",  # Common Voice `ar` load + 16 kHz cast (Task 12.2). <4: datasets 4.0 dropped script-based loading; Common Voice 17 needs trust_remote_code.
+    "evaluate>=0.4.3",       # WER/CER metric harness (Task 12.3/12.6)
+    "jiwer>=3.0.5",          # the WER/CER implementation evaluate delegates to
+    "soundfile>=0.12.1",     # decode OGG/WAV bytes to arrays at serve time (Task 12.4)
+    "accelerate>=1.1.0",     # Trainer device placement / mixed precision on the GPU
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.3.0",

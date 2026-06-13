@@ -167,6 +167,44 @@ docker compose restart worker
 
 ---
 
+## 7. Voice transcription: enable the fine-tuned Whisper (Phase 12)
+
+By default `TRANSCRIBE_MODE=dev` (offline stub) locally/CI; a LIVE deployment runs
+`gemini` — voice notes transcribe through the existing Gemini key with NO model to fetch.
+To switch to the fine-tuned `whisper-small` (cheaper at volume, improvable on dialect):
+
+**1. Fetch the artifact** — it is ~1 GB and git-ignored (AD-12.4), stored out-of-repo. The
+one-liner depends on where the Colab run uploaded it:
+```bash
+# Hugging Face Hub (recommended):
+uv run --extra asr huggingface-cli download <hf-repo-id> \
+  --local-dir backend/app/asr/artifacts/whisper-small-ar
+# …or a GitHub Release asset:
+curl -L <release-asset-url> -o /tmp/whisper.tgz && \
+  tar -xzf /tmp/whisper.tgz -C backend/app/asr/artifacts/
+# …or the project MinIO bucket:
+mc cp -r local/modir-models/whisper-small-ar backend/app/asr/artifacts/
+```
+
+**2. Install the serve deps + flip the mode** (torch is in the optional `asr` extra):
+```bash
+cd backend && uv sync --extra asr
+# .env:  TRANSCRIBE_MODE=whisper   WHISPER_MODEL_PATH=app/asr/artifacts/whisper-small-ar
+docker compose up -d api          # the model loads ONCE in lifespan
+```
+
+**3. Verify** the WER floor against the fetched artifact:
+```bash
+cd backend && uv run --extra asr python -m app.asr.eval   # PASS / FAIL vs asr.wer_max
+```
+
+**Fallback (no action needed):** if the artifact is missing or fails to load, the app logs
+`audio.transcriber.whisper_artifact_missing` / `..._load_failed` and degrades to `gemini`
+automatically — live voice never crashes. To roll back deliberately, set
+`TRANSCRIBE_MODE=gemini` and restart the api.
+
+---
+
 ## Backup & Restore
 
 ### Run a backup

@@ -1,0 +1,14 @@
+# WER floor for the fine-tuned Whisper artifact (Phase 12, Task 12.6). The golden eval
+# (`python -m app.asr.eval`) runs the model over the committed golden slice and FAILS CI
+# if WER exceeds this ceiling — break the model on purpose -> red. Set with a clear margin
+# so a normal fine-tune passes but a real regression trips it. Tune here, never in code.
+#
+# Units: PERCENT (0..100), the same scale as results.csv / model_card.json.
+# Honesty: public Arabic (FLEURS ar_eg, read MSA), NOT Lebanese dialect — this gates the
+# PIPELINE, not real-world dialect accuracy (AD-12.5).
+#
+# Set from the first real Colab run (results.csv): on FLEURS ar_eg validation the fine-tuned
+# model scored 21.82 WER and the zero-shot baseline 30.31. wer_max sits between them, so the
+# served model passes with margin (~8 pts) but a regression to baseline quality trips CI.
+asr:
+  wer_max: 30.0
