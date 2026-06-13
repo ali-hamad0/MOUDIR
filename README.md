@@ -78,7 +78,13 @@ flowchart TD
 git clone <repo-url> modir
 cd modir
 cp .env.example .env          # review and set VAULT secrets if needed
-docker compose up             # starts db, redis, minio, vault, vault-seed, migrate, api, worker
+docker compose up             # starts db, redis, minio, vault, vault-init, migrate, api, worker
+
+# FIRST RUN ONLY: vault-init initializes Vault (unseal key + root token land in
+# secrets/vault-init.txt, gitignored) — then seed the secret paths once. Vault
+# data persists from now on; change values manually in the UI
+# (http://localhost:8200, token "root") or via `vault kv patch`.
+docker compose --profile seed run --rm vault-seed
 ```
 
 The API is now available at `http://localhost:8000`.

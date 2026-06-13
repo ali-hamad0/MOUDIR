@@ -58,32 +58,110 @@ services:
 
   vault:
     image: hashicorp/vault:latest
+    # Real server mode (NOT -dev): file storage in the vault_data volume, so
+    # secrets PERSIST across `docker compose up/down`. The official entrypoint
+    # writes VAULT_LOCAL_CONFIG to /vault/config/local.json and runs
+    # `vault server -config=/vault/config`.
+    command: server
     environment:
-      VAULT_DEV_ROOT_TOKEN_ID: root
-      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      VAULT_LOCAL_CONFIG: >-
+        {"storage": {"file": {"path": "/vault/file"}},
+         "listener": [{"tcp": {"address": "0.0.0.0:8200", "tls_disable": true}}],
+         "ui": true}
     cap_add:
       - IPC_LOCK
     volumes:
-      - vault_data:/vault/data
+      - vault_data:/vault/file
     networks:
       - modir_net
     ports:
-      - "8200:8200"  # exposed so seed script can hit it from host
+      - "8200:8200"  # exposed for the UI (http://localhost:8200) and host CLI
     healthcheck:
+      # Exit 0 only when initialized AND unsealed (sealed exits 2), so
+      # service_healthy below means "ready for KV reads", not just "process up".
+      # start_period gives vault-init time to unseal before failures count.
       test: ["CMD", "vault", "status", "-address=http://127.0.0.1:8200"]
       interval: 5s
       timeout: 3s
       retries: 5
+      start_period: 30s
 
-  # Dev-only: Vault runs in in-memory dev mode, so secrets are wiped on every
-  # recreate. This one-shot service re-seeds them automatically once Vault is up,
-  # then exits. Keeps `docker compose up` self-contained — no manual seed step.
+  # One-shot bootstrap for the persistent Vault above. Runs on every `up` but
+  # only does infra work — it NEVER touches stored secrets:
+  #   first boot:  init (1 key share) -> save keys to secrets/vault-init.txt
+  #                (gitignored) -> unseal -> enable KV v2 at secret/ -> create
+  #                a root-alias token with id "root" so .env VAULT_TOKEN=root
+  #                keeps working.
+  #   later boots: just unseals using the saved key file.
+  vault-init:
+    image: hashicorp/vault:latest
+    environment:
+      VAULT_ADDR: http://vault:8200
+    volumes:
+      - ./secrets:/vault/secrets
+    networks:
+      - modir_net
+    depends_on:
+      vault:
+        condition: service_started   # can't wait for healthy — healthy requires the unseal WE do
+    restart: "no"
+    # All $$ are deliberate: they expand IN THE CONTAINER at run time; a single $
+    # would make compose interpolate from the HOST at parse time.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        KEYS_FILE=/vault/secrets/vault-init.txt
+        i=0
+        while :; do
+          vault status >/dev/null 2>&1
+          rc=$$?
+          if [ "$$rc" = "0" ] || [ "$$rc" = "2" ]; then break; fi
+          i=$$((i+1))
+          if [ "$$i" -gt 60 ]; then echo "vault-init: Vault API never came up"; exit 1; fi
+          sleep 1
+        done
+        if vault status 2>/dev/null | grep -q "Initialized.*false"; then
+          echo "vault-init: first boot — initializing and unsealing"
+          vault operator init -key-shares=1 -key-threshold=1 > "$$KEYS_FILE" || exit 1
+          UNSEAL_KEY=$$(grep "Unseal Key 1:" "$$KEYS_FILE" | awk '{print $$NF}')
+          ROOT_TOKEN=$$(grep "Initial Root Token:" "$$KEYS_FILE" | awk '{print $$NF}')
+          vault operator unseal "$$UNSEAL_KEY" >/dev/null || exit 1
+          export VAULT_TOKEN="$$ROOT_TOKEN"
+          vault secrets enable -path=secret kv-v2 || exit 1
+          vault token create -id=root -policy=root >/dev/null || exit 1
+          echo "vault-init: done — keys saved to secrets/vault-init.txt (gitignored)"
+          echo "vault-init: seed initial secrets ONCE with:"
+          echo "vault-init:   docker compose --profile seed run --rm vault-seed"
+        elif vault status 2>/dev/null | grep -q "Sealed.*true"; then
+          UNSEAL_KEY=$$(grep "Unseal Key 1:" "$$KEYS_FILE" 2>/dev/null | awk '{print $$NF}')
+          if [ -z "$$UNSEAL_KEY" ]; then
+            echo "vault-init: Vault is sealed and $$KEYS_FILE is missing — unseal manually:"
+            echo "vault-init:   docker compose exec vault vault operator unseal <key>"
+            exit 1
+          fi
+          vault operator unseal "$$UNSEAL_KEY" >/dev/null || exit 1
+          echo "vault-init: unsealed existing Vault"
+        else
+          echo "vault-init: already initialized and unsealed — nothing to do"
+        fi
+
+  # MANUAL seed — does NOT run on `docker compose up` (profile-gated). Vault now
+  # persists, so run this exactly once after the first init (or deliberately, to
+  # reset the paths below to the values in .vault_secrets.env / placeholders):
+  #
+  #   docker compose --profile seed run --rm vault-seed
+  #
+  # WARNING: re-running OVERWRITES these paths. Day-to-day changes should be made
+  # by hand instead, in the UI (http://localhost:8200, token "root") or CLI:
+  #   docker compose exec vault sh -c 'VAULT_TOKEN=root vault kv patch secret/modir/llm gemini_api_key=...'
   #
   # Real keys: create .vault_secrets.env (gitignored) with your actual values.
   # Place the GCP service-account JSON at secrets/service_account.json (gitignored).
   # Both files are optional — missing entries fall back to dev placeholders.
   vault-seed:
     image: hashicorp/vault:latest
+    profiles: [seed]
     environment:
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: root
@@ -159,8 +237,8 @@ services:
       redis:
         condition: service_healthy
       vault:
-        condition: service_started
-      vault-seed:
+        condition: service_healthy   # healthy = initialized AND unsealed
+      vault-init:
         condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
@@ -186,8 +264,8 @@ services:
       redis:
         condition: service_healthy
       vault:
-        condition: service_started
-      vault-seed:
+        condition: service_healthy   # healthy = initialized AND unsealed
+      vault-init:
         condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
