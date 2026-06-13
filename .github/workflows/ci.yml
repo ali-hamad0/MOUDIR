@@ -86,6 +86,15 @@ jobs:
         # failed. No DB/Vault needed — it loads artifacts + golden JSON straight from disk.
         run: uv run python -m app.ml.eval
 
+      - name: ASR WER golden eval (artifact-aware)
+        working-directory: ./backend
+        # Phase 12 (Task 12.6): run the committed golden slice through the fine-tuned
+        # Whisper artifact and fail if WER exceeds asr.wer_max (app/asr/eval_thresholds.yaml).
+        # The ~1 GB artifact is git-ignored (AD-12.4), so in CI this SKIPS cleanly (exit 0,
+        # logged) and pulls NO torch; it gates for real on a host/Colab box that has fetched
+        # the artifact + installed the `asr` extra.
+        run: uv run python -m app.asr.eval
+
       - name: Routing golden evals (offline mock)
         working-directory: ./backend
         # Phase 7 (Task 7.10): run the 26 Arabic routing queries through the offline

@@ -1,0 +1,13 @@
+{
+  "dataset": "mozilla-foundation/common_voice_17_0",
+  "language": "ar",
+  "split": "validation",
+  "note": "A fixed, small slice of the Common Voice ar VALIDATION split (held out from training), referenced by row index. The eval runs the fine-tuned model on these clips and scores WER against each clip's own normalized sentence (app.asr.dataset.normalize_arabic). Deterministic given the dataset version pinned above. If the dataset version changes, re-pin the indices.",
+  "indices": [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+    10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+    20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+    30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+    40, 41, 42, 43, 44, 45, 46, 47, 48, 49
+  ]
+}
