@@ -131,6 +131,27 @@ class Settings(BaseSettings):
     ml_churn_artifact: str = Field(default="churn.joblib")
     ml_anomaly_artifact: str = Field(default="anomaly.joblib")
 
+    # ASR / voice transcription (Phase 12). Provider-agnostic exactly like ocr_mode /
+    # ml_mode: transcribe_mode selects the backend behind the SAME
+    # AudioTranscriber.transcribe(...) seam, so no webhook caller changes.
+    #   "dev"     — canned Arabic stub (offline, no network, no key) — the CI/dev DEFAULT.
+    #   "gemini"  — the Phase-10 Gemini native-audio REST path; the zero-artifact LIVE
+    #               fallback so WhatsApp voice keeps working with no model fetched.
+    #   "whisper" — the fine-tuned whisper-small, loaded ONCE in lifespan (Task 12.4).
+    # The heavy torch/transformers stack is quarantined to the "whisper" branch and
+    # lazily imported there only (AD-12.6); "dev"/"gemini" never touch it.
+    transcribe_mode: str = Field(default="dev")  # "dev" | "gemini" | "whisper"
+    # Where the fine-tuned artifact (~1 GB, git-ignored — AD-12.4) is fetched FROM: a
+    # GitHub Release asset, a Hugging Face repo id, or a MinIO/S3 URI. Empty in CI/dev;
+    # a documented fetch step pulls it to whisper_model_path before "whisper" is used.
+    whisper_model_uri: str = Field(default="")
+    # Local cache the WhisperTranscriber loads the model + processor from. Under
+    # app/asr/artifacts/ by default (git-ignored). CI/dev never need it.
+    whisper_model_path: str = Field(default="app/asr/artifacts/whisper-small-ar")
+    # Inference device for the loaded model. "cpu" by default — a single short voice
+    # note transcribes acceptably on CPU at serve time; a GPU host can set "cuda".
+    whisper_device: str = Field(default="cpu")  # "cpu" | "cuda"
+
     # Dashboard CORS — the React app (Phase 3) runs on a different origin, so the
     # browser needs explicit cross-origin permission. A typed list, never "*"
     # with credentials (that combination is a security hole the browser itself

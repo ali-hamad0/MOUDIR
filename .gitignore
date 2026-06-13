@@ -38,6 +38,13 @@ docker-compose.override.yml
 # Phase 6 ML training-data snapshots (data, not code — exported for offline/Colab use)
 ml_export/
 backend/ml_export/
+# Phase 12 ASR — the fine-tuned Whisper artifact (~1 GB) is NOT committed (AD-12.4);
+# it is fetched out-of-repo (Release/HF/MinIO). artifacts/ holds ONLY the ignored
+# weights/processor; the dir is kept via its .gitkeep. The small model_card.json IS
+# committed (AD-12.4) but lives OUTSIDE artifacts/ — git cannot re-include a file whose
+# parent dir is excluded, so the card's committed home (Task 12.3) is app/asr/, not here.
+backend/app/asr/artifacts/*
+!backend/app/asr/artifacts/.gitkeep
 # Phase 8 backup archives — not versioned; .gitkeep files mark the directories
 backups/postgres/*.sql.gz
 backups/minio/*/
