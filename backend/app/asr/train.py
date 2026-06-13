@@ -60,7 +60,7 @@ def train(
     from app.asr.dataset import (
         DATA_SOURCE,
         DATASET_ID,
-        load_common_voice_ar,
+        load_arabic_asr,
         normalize_arabic,
     )
     from app.asr.features import build_data_collator, build_processor, make_prepare_example
@@ -72,7 +72,7 @@ def train(
 
     # 1. Data → features.
     processor = build_processor(base_model)
-    dataset, sizes = load_common_voice_ar(smoke=smoke, token=token)
+    dataset, sizes = load_arabic_asr(smoke=smoke, token=token)
     prepare = make_prepare_example(processor)
     dataset = dataset.map(prepare, remove_columns=dataset["train"].column_names, num_proc=1)
 
@@ -108,7 +108,11 @@ def train(
         warmup_steps=0 if smoke else 200,
         max_steps=2 if smoke else -1,
         num_train_epochs=1 if smoke else num_train_epochs,
-        gradient_checkpointing=True,
+        # Gradient checkpointing is OFF: it triggers a "backward through the graph a second
+        # time" error with Whisper on current torch (even with use_reentrant=False).
+        # whisper-small is small enough to train without it; if a large GPU run OOMs, lower
+        # per_device_train_batch_size (8 -> 4) rather than re-enabling checkpointing.
+        gradient_checkpointing=False,
         fp16=torch.cuda.is_available(),
         eval_strategy="no",  # we evaluate manually (baseline + final) below
         per_device_eval_batch_size=2 if smoke else 8,
@@ -136,7 +140,7 @@ def train(
         ASRExperimentResult(
             model="whisper-small-zeroshot",
             base_model=base_model,
-            dataset="common_voice_ar",
+            dataset="fleurs_ar_eg",
             split="validation",
             hours=round(sizes.train_hours, 2),
             n_examples=sizes.n_val,
@@ -154,7 +158,7 @@ def train(
         ASRExperimentResult(
             model="whisper-small-ft",
             base_model=base_model,
-            dataset="common_voice_ar",
+            dataset="fleurs_ar_eg",
             split="validation",
             hours=round(sizes.train_hours, 2),
             n_examples=sizes.n_val,

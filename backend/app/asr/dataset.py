@@ -1,10 +1,16 @@
-"""Dataset prep for the Whisper fine-tune — Mozilla Common Voice Arabic (Task 12.2).
+"""Dataset prep for the Whisper fine-tune — Google FLEURS Arabic (Task 12.2).
 
-Loads Common Voice `ar`, casts audio to 16 kHz mono (Whisper expects EXACTLY that — a
-wrong sample rate silently wrecks WER), normalizes the reference text with a fixed,
-recorded policy (below), and exposes the predefined train/validation/test splits. A
-small exporter writes a Colab-ready subset so the notebook trains without re-streaming
-the whole corpus.
+Loads FLEURS `ar_eg`, casts audio to 16 kHz mono (Whisper expects EXACTLY that — a wrong
+sample rate silently wrecks WER), normalizes the reference text with a fixed, recorded
+policy (below), and exposes the predefined train/validation/test splits. A small exporter
+writes a Colab-ready subset so the notebook trains without re-streaming the whole corpus.
+
+WHY FLEURS, not Common Voice: the original plan (AD-12.5) named Mozilla Common Voice `ar`,
+but Hugging Face dropped script-based dataset loading, and `mozilla-foundation/common_voice_17_0`
+is a script dataset that no longer resolves through `load_dataset` on any current `datasets`
+version. `google/fleurs` is an OFFICIAL, Parquet-formatted multilingual ASR set (no loading
+script, no gating) that loads on every `datasets` version. It is read Modern Standard Arabic
+— still PUBLIC Arabic, NOT Lebanese dialect, so the honesty caveat is unchanged.
 
 `datasets` / `soundfile` are imported LAZILY inside the functions (AD-12.6), so
 `import app.asr.dataset` works on the default CI/dev path with neither installed. The
@@ -18,9 +24,9 @@ TEXT-NORMALIZATION POLICY (decision, recorded — the spec left this open; AD-12
 Applied IDENTICALLY to the training targets and the eval references, so the reported
 WER is honest (the model is scored on the same form it was trained to produce):
 
-  1. Strip Arabic diacritics (tashkeel) and the tatweel/kashida elongation. Common
-     Voice references are inconsistently voweled and Whisper does not emit tashkeel, so
-     scoring them would be pure noise.
+  1. Strip Arabic diacritics (tashkeel) and the tatweel/kashida elongation. References
+     are inconsistently voweled and Whisper does not emit tashkeel, so scoring them
+     would be pure noise.
   2. Remove a fixed punctuation set (Arabic + Latin) that Whisper does not reliably
      emit for Arabic, so it does not inflate WER as spurious substitutions.
   3. Collapse all whitespace to single spaces and trim.
@@ -52,10 +58,14 @@ log = get_logger(__name__)
 # Whisper is trained at 16 kHz mono; every clip is resampled to this before features.
 TARGET_SAMPLE_RATE = 16_000
 # Honesty marker carried onto every row/card produced from this loader (AD-12.5):
-# Common Voice Arabic is broad/MSA-leaning, NOT Lebanese dialect.
+# FLEURS Arabic is read MSA, NOT Lebanese dialect.
 DATA_SOURCE = "public_arabic"
-DATASET_ID = "mozilla-foundation/common_voice_17_0"
+DATASET_ID = "google/fleurs"
+DATASET_CONFIG = "ar_eg"
 LANGUAGE = "ar"
+# FLEURS stores the transcript under "transcription"; we rename it to "sentence" so the
+# rest of the pipeline (features/train/eval) stays dataset-agnostic.
+TEXT_COLUMN = "transcription"
 SPLITS = ("train", "validation", "test")
 
 # Policy step 1 — strip Arabic tashkeel + tatweel. Built from explicit codepoint ranges:
@@ -125,29 +135,30 @@ def _hours(dataset: object) -> float:
     return total_samples / TARGET_SAMPLE_RATE / 3600.0
 
 
-def load_common_voice_ar(
+def load_arabic_asr(
     *,
     smoke: bool = False,
     smoke_size: int = 16,
     token: str | None = None,
 ) -> tuple[DatasetDict, SplitSizes]:
-    """Load Common Voice `ar`, resample to 16 kHz mono, normalize references, and return
-    the (DatasetDict, SplitSizes).
+    """Load FLEURS Arabic (ar_eg), resample to 16 kHz mono, normalize references into the
+    `sentence` column, and return (DatasetDict, SplitSizes).
 
-    The dataset is GATED on the Hugging Face Hub (accept the terms once and pass a
-    `token`, or be logged in via `huggingface-cli login`). `smoke=True` slices a tiny
-    subset per split for a fast pipeline-shape check; the full run streams everything on
-    Colab. Heavy imports are local to this function (AD-12.6).
+    FLEURS is public Parquet (no script, no gating), so it loads on any `datasets`
+    version with no `trust_remote_code`. `smoke=True` slices a tiny subset per split for a
+    fast pipeline-shape check; the full run streams everything on Colab. Heavy imports are
+    local to this function (AD-12.6).
     """
     from datasets import Audio, DatasetDict, load_dataset
 
     splits: dict[str, object] = {}
     for split in SPLITS:
         spec = f"{split}[:{smoke_size}]" if smoke else split
-        ds = load_dataset(DATASET_ID, LANGUAGE, split=spec, token=token, trust_remote_code=True)
+        ds = load_dataset(DATASET_ID, DATASET_CONFIG, split=spec, token=token)
         # Decode to 16 kHz mono arrays (Whisper's expected input).
         ds = ds.cast_column("audio", Audio(sampling_rate=TARGET_SAMPLE_RATE))
-        # Normalize the reference text in-place.
+        # Normalize the transcript into a dataset-agnostic `sentence` column.
+        ds = ds.rename_column(TEXT_COLUMN, "sentence")
         ds = ds.map(
             lambda batch: {"sentence": normalize_arabic(batch["sentence"])},
             desc=f"normalize:{split}",
@@ -168,7 +179,7 @@ def load_common_voice_ar(
 
 def export_for_colab(dataset: DatasetDict, out_dir: str | Path) -> Path:
     """Persist a prepared subset to disk (git-ignored) so the Colab notebook trains from
-    a cached snapshot instead of re-streaming Common Voice. Mirrors the Phase-6 export
+    a cached snapshot instead of re-streaming the corpus. Mirrors the Phase-6 export
     discipline — data, not code, stays out of the repo.
     """
     out = Path(out_dir)

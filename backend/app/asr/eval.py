@@ -79,18 +79,23 @@ def evaluate_golden(
     import torch
     from datasets import Audio, load_dataset
 
-    from app.asr.dataset import LANGUAGE, TARGET_SAMPLE_RATE, normalize_arabic
+    from app.asr.dataset import (
+        DATASET_CONFIG,
+        TARGET_SAMPLE_RATE,
+        TEXT_COLUMN,
+        normalize_arabic,
+    )
     from app.infra.asr.whisper_transcriber import load_whisper
 
     model, processor = load_whisper(str(model_path))
     ds = load_dataset(
         golden["dataset"],
-        golden.get("language", LANGUAGE),
+        golden.get("config", DATASET_CONFIG),
         split=golden["split"],
         token=token,
-        trust_remote_code=True,
     )
     ds = ds.cast_column("audio", Audio(sampling_rate=TARGET_SAMPLE_RATE))
+    ds = ds.rename_column(golden.get("text_column", TEXT_COLUMN), "sentence")
 
     preds: list[str] = []
     refs: list[str] = []

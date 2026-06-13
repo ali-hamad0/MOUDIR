@@ -22,8 +22,8 @@ from pathlib import Path
 # report a real WER on it; we do NOT claim Lebanese-dialect accuracy from MSA-leaning
 # data. The path to real dialect data is the Phase-12.5 follow-up.
 DIALECT_CAVEAT = (
-    "Trained and evaluated on Mozilla Common Voice Arabic, which is broad and "
-    "MSA-leaning — NOT Lebanese dialect. The reported WER/CER reflect public Arabic "
+    "Trained and evaluated on Google FLEURS Arabic (ar_eg), which is read Modern "
+    "Standard Arabic — NOT Lebanese dialect. The reported WER/CER reflect public Arabic "
     "and prove the pipeline is correct; Lebanese-dialect accuracy is unproven until "
     "consented owner/customer voice notes are collected and the same pipeline is "
     "re-run on them (AD-12.5)."

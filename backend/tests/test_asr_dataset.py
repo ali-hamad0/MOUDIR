@@ -95,7 +95,7 @@ def test_split_sizes_as_dict_rounds_hours():
 )
 def test_loader_importable_when_deps_present():
     # When the asr extra IS installed, the lazy import path inside the loader resolves.
-    # We do NOT download here (Common Voice ar is HF-gated and large).
-    from app.asr.dataset import load_common_voice_ar
+    # We do NOT download here (FLEURS ar_eg is fetched on the host/Colab run).
+    from app.asr.dataset import load_arabic_asr
 
-    assert callable(load_common_voice_ar)
+    assert callable(load_arabic_asr)

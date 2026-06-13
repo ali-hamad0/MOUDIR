@@ -1,8 +1,9 @@
 {
-  "dataset": "mozilla-foundation/common_voice_17_0",
-  "language": "ar",
+  "dataset": "google/fleurs",
+  "config": "ar_eg",
+  "text_column": "transcription",
   "split": "validation",
-  "note": "A fixed, small slice of the Common Voice ar VALIDATION split (held out from training), referenced by row index. The eval runs the fine-tuned model on these clips and scores WER against each clip's own normalized sentence (app.asr.dataset.normalize_arabic). Deterministic given the dataset version pinned above. If the dataset version changes, re-pin the indices.",
+  "note": "A fixed, small slice of the FLEURS ar_eg VALIDATION split (held out from training), referenced by row index. The eval runs the fine-tuned model on these clips and scores WER against each clip's own normalized transcript (app.asr.dataset.normalize_arabic). Deterministic given the dataset above. FLEURS is public Parquet (no script, no gating).",
   "indices": [
     0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
     10, 11, 12, 13, 14, 15, 16, 17, 18, 19,

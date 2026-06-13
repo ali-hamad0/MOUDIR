@@ -1,1 +1,3 @@
 timestamp,model,base_model,dataset,split,hours,n_examples,wer,cer,data_source,notes
+2026-06-13T14:38:49.286036+00:00,whisper-small-zeroshot,openai/whisper-small,fleurs_ar_eg,validation,6.05,295,30.31,9.63,public_arabic,zero-shot baseline (pre-finetune)
+2026-06-13T15:07:33.423439+00:00,whisper-small-ft,openai/whisper-small,fleurs_ar_eg,validation,6.05,295,21.82,6.78,public_arabic,epochs=3.0

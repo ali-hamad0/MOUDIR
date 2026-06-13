@@ -42,6 +42,9 @@ backend/ml_export/
 # export_for_colab writes here). Same discipline as ml_export/.
 asr_export/
 backend/asr_export/
+# Transient code bundle uploaded to Colab (cd backend && tar -czf asr_code.tgz app) — never commit.
+asr_code.tgz
+backend/asr_code.tgz
 # Phase 12 ASR — the fine-tuned Whisper artifact (~1 GB) is NOT committed (AD-12.4);
 # it is fetched out-of-repo (Release/HF/MinIO). artifacts/ holds ONLY the ignored
 # weights/processor; the dir is kept via its .gitkeep. The small model_card.json IS

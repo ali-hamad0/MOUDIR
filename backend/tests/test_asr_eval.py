@@ -22,7 +22,7 @@ def test_thresholds_has_asr_wer_max():
 def test_golden_set_is_validation_indices():
     g = load_golden()
     assert g["split"] == "validation"
-    assert g["dataset"].startswith("mozilla-foundation/common_voice")
+    assert g["dataset"] == "google/fleurs"
     assert isinstance(g["indices"], list) and len(g["indices"]) > 0
     assert all(isinstance(i, int) for i in g["indices"])
 

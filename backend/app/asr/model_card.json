@@ -1,0 +1,18 @@
+{
+  "model": "whisper-small-ar",
+  "base_model": "openai/whisper-small",
+  "language": "ar",
+  "dataset": "google/fleurs",
+  "wer": 21.82,
+  "cer": 6.78,
+  "train_hours": 6.05,
+  "n_train": 2104,
+  "n_eval": 295,
+  "epochs": 3.0,
+  "zeroshot_wer": 30.31,
+  "split": "validation",
+  "data_source": "public_arabic",
+  "dialect_caveat": "Trained and evaluated on Google FLEURS Arabic (ar_eg), which is read Modern Standard Arabic — NOT Lebanese dialect. The reported WER/CER reflect public Arabic and prove the pipeline is correct; Lebanese-dialect accuracy is unproven until consented owner/customer voice notes are collected and the same pipeline is re-run on them (AD-12.5).",
+  "notes": "",
+  "trained_at": "2026-06-13T15:08:45.859593+00:00"
+}
