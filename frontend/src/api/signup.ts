@@ -8,6 +8,7 @@ export interface SignupRequestInput {
   business_name: string;
   owner_phone: string;
   owner_email: string;
+  otp_code: string;
 }
 
 export interface SignupRequestResult {
@@ -18,28 +19,40 @@ export interface SignupRequestResult {
   created_at: string;
 }
 
-export const signupApi = {
-  submit: async (input: SignupRequestInput): Promise<SignupRequestResult> => {
-    let res: Response;
+export interface OtpResult {
+  sent_to: string;
+}
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(0, "network");
+  }
+  if (!res.ok) {
+    let detail = res.statusText;
     try {
-      res = await fetch(`${API_BASE_URL}/signup-requests`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-      });
+      const data = await res.json();
+      if (typeof data?.detail === "string") detail = data.detail;
     } catch {
-      throw new ApiError(0, "network");
+      /* keep status text */
     }
-    if (!res.ok) {
-      let detail = res.statusText;
-      try {
-        const data = await res.json();
-        if (typeof data?.detail === "string") detail = data.detail;
-      } catch {
-        /* keep status text */
-      }
-      throw new ApiError(res.status, detail);
-    }
-    return (await res.json()) as SignupRequestResult;
-  },
+    throw new ApiError(res.status, detail);
+  }
+  return (await res.json()) as T;
+}
+
+export const signupApi = {
+  // Step 1: WhatsApp a one-time code to the phone so we can prove it's real.
+  requestOtp: (owner_phone: string): Promise<OtpResult> =>
+    postJson<OtpResult>("/signup-requests/otp", { owner_phone }),
+
+  // Step 2: submit the application with the code the owner received.
+  submit: (input: SignupRequestInput): Promise<SignupRequestResult> =>
+    postJson<SignupRequestResult>("/signup-requests", input),
 };

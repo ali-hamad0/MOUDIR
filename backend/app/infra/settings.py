@@ -253,6 +253,17 @@ class Settings(BaseSettings):
     # A per-tenant policy value of "0" means no limit (explicit bypass).
     rate_limit_default_rpm: int = Field(default=30)
 
+    # Signup phone OTP — the WhatsApp one-time code that verifies the phone on a
+    # public registration request BEFORE it is accepted. State lives in Redis only
+    # (no DB row; there is no tenant yet). The caps below make the endpoint unusable
+    # as a WhatsApp-spam/bombing tool: a short cooldown between sends, a per-phone
+    # hourly send cap, and a per-code attempt cap that burns the code once exceeded.
+    signup_otp_length: int = Field(default=6)
+    signup_otp_ttl_seconds: int = Field(default=300)  # code valid 5 minutes
+    signup_otp_resend_cooldown_seconds: int = Field(default=60)
+    signup_otp_max_sends_per_hour: int = Field(default=5)
+    signup_otp_max_attempts: int = Field(default=5)
+
     # Log aggregator (Phase 8, Task 8.6). Empty string disables Loki shipping.
     # Set to http://loki:3100 when running with --profile observability.
     loki_url: str = Field(default="")
