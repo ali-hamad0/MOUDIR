@@ -5,7 +5,7 @@ Two modes, selected by Settings.mail_mode:
   the machine — this is the default for development.
 - "api": POST to a provider's HTTP API using httpx.AsyncClient (never the
   `requests` library — constitution). The provider key resolves from Vault
-  (Settings.mail_api_key); wire a concrete provider here when one is chosen.
+  (Settings.mail_api_key). Implemented for Resend (https://resend.com).
 
 Application code calls `EmailSender.send(...)`; swapping providers is a change in
 THIS module, not in callers.
@@ -14,6 +14,7 @@ THIS module, not in callers.
 from email.message import EmailMessage
 
 import aiosmtplib
+import httpx
 
 from app.infra.logging import get_logger
 from app.infra.settings import Settings
@@ -49,7 +50,31 @@ class EmailSender:
         log.info("email.sent", mode="smtp", to_domain=to.split("@")[-1])
 
     async def _send_via_api(self, *, to: str, subject: str, body: str) -> None:
-        # Placeholder for a real provider (SES/Resend/Postmark) via httpx
-        # (the constitution's required HTTP client). Implemented when a provider
-        # is chosen; the key is Settings.mail_api_key, resolved from Vault.
-        raise NotImplementedError("API mail provider not configured; use mail_mode='dev'")
+        """Send through Resend's HTTP API (https://resend.com).
+
+        Uses httpx.AsyncClient (the constitution's required HTTP client, never
+        `requests`). The API key resolves from Vault (Settings.mail_api_key).
+        A non-2xx response is logged and raised so the caller can decide; the
+        activation token already exists, so a failed send can be retried.
+        """
+        api_key = self._settings.mail_api_key.get_secret_value()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "from": self._settings.mail_from,
+                    "to": [to],
+                    "subject": subject,
+                    "text": body,
+                },
+            )
+        if response.status_code >= 400:
+            log.error(
+                "email.api.failed",
+                status=response.status_code,
+                to_domain=to.split("@")[-1],
+                detail=response.text[:200],
+            )
+            response.raise_for_status()
+        log.info("email.sent", mode="api", to_domain=to.split("@")[-1])
