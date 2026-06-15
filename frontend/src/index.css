@@ -16,14 +16,14 @@
    trustworthy SaaS-business palette for non-technical SME owners. Components
    reference these through Tailwind semantic names, never raw hex. */
 :root {
-  --color-primary: #2563eb; /* trust blue */
+  --color-primary: #16a34a; /* trust green — brand actions */
   --color-on-primary: #ffffff;
   --color-accent: #059669; /* emerald — confirmed / positive */
   --color-on-accent: #ffffff;
   --color-background: #f8fafc;
   --color-foreground: #1e293b;
   --color-card: #ffffff;
-  --color-muted: #e9eff8;
+  --color-muted: #e7f1ea;
   --color-muted-foreground: #64748b;
   --color-border: #e2e8f0;
   --color-destructive: #dc2626; /* reject / unavailable / error */
