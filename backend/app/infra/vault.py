@@ -26,7 +26,12 @@ class VaultClient:
         """
         try:
             response = self._client.secrets.kv.v2.read_secret_version(path=path)
-            return response["data"]["data"][key]
+            # Strip surrounding whitespace: a stray trailing newline (e.g. from
+            # `vault kv patch ... =$(cat key.txt)`) is invisible but breaks any
+            # consumer that interpolates the secret into a URL — httpx rejects the
+            # embedded '\n' as InvalidURL (the Gemini OCR/voice REST paths). Keys,
+            # tokens, and JSON credentials never carry meaningful edge whitespace.
+            return response["data"]["data"][key].strip()
         except Exception as e:
             log.error("vault.read.failed", path=path, key=key, error=str(e))
             raise

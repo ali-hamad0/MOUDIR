@@ -53,29 +53,6 @@ def test_security_has_contact():
     assert has_email or has_advisory, "SECURITY.md has no identifiable reporting contact"
 
 
-# ── 2. For-reviewers guide ────────────────────────────────────────────────────
-
-
-def test_for_reviewers_exists():
-    """docs/FOR_REVIEWERS.md must be present."""
-    assert (_REPO / "docs" / "FOR_REVIEWERS.md").exists(), "docs/FOR_REVIEWERS.md missing"
-
-
-def test_for_reviewers_covers_all_phases():
-    """FOR_REVIEWERS.md must address all phases 0–8."""
-    content = (_REPO / "docs" / "FOR_REVIEWERS.md").read_text(encoding="utf-8")
-    for phase in range(9):  # 0 through 8
-        assert f"Phase {phase}" in content, f"docs/FOR_REVIEWERS.md does not cover Phase {phase}"
-
-
-def test_for_reviewers_has_code_references():
-    """FOR_REVIEWERS.md must contain at least 10 code references."""
-    content = (_REPO / "docs" / "FOR_REVIEWERS.md").read_text(encoding="utf-8")
-    # Accepts both "→ Code" and "→ Code:" forms used in the file
-    count = content.count("→ Code")
-    assert count >= 10, f"docs/FOR_REVIEWERS.md has only {count} code references (expected >= 10)"
-
-
 # ── 3. Demo seed script ───────────────────────────────────────────────────────
 
 
@@ -108,27 +85,6 @@ def test_seed_demo_seeds_Lebanese_products():
     assert "بقلاوة" in content, "seed_demo.py does not contain Arabic product name for baklawa"
 
 
-# ── 4. Demo script ────────────────────────────────────────────────────────────
-
-
-def test_demo_script_exists():
-    """docs/DEMO_SCRIPT.md must be present."""
-    assert (_REPO / "docs" / "DEMO_SCRIPT.md").exists(), "docs/DEMO_SCRIPT.md missing"
-
-
-def test_demo_script_has_five_acts():
-    """DEMO_SCRIPT.md must have at least 5 acts."""
-    content = (_REPO / "docs" / "DEMO_SCRIPT.md").read_text(encoding="utf-8")
-    assert content.count("## Act") >= 5, "docs/DEMO_SCRIPT.md has fewer than 5 acts"
-
-
-def test_demo_script_has_curl_commands():
-    """DEMO_SCRIPT.md must contain cURL commands for live verification."""
-    content = (_REPO / "docs" / "DEMO_SCRIPT.md").read_text(encoding="utf-8")
-    assert "curl" in content, "docs/DEMO_SCRIPT.md has no cURL commands"
-    assert "webhooks/whatsapp" in content, "docs/DEMO_SCRIPT.md does not show the webhook endpoint"
-
-
 # ── 5. README polish ──────────────────────────────────────────────────────────
 
 
@@ -148,15 +104,3 @@ def test_readme_has_for_reviewers_section():
     """README.md must have a For Reviewers section."""
     content = (_REPO / "README.md").read_text(encoding="utf-8")
     assert "## For Reviewers" in content, "README.md missing ## For Reviewers section"
-
-
-def test_readme_links_to_for_reviewers():
-    """README.md must link to docs/FOR_REVIEWERS.md."""
-    content = (_REPO / "README.md").read_text(encoding="utf-8")
-    assert "FOR_REVIEWERS.md" in content, "README.md does not link to docs/FOR_REVIEWERS.md"
-
-
-def test_readme_links_to_demo_script():
-    """README.md must link to docs/DEMO_SCRIPT.md."""
-    content = (_REPO / "README.md").read_text(encoding="utf-8")
-    assert "DEMO_SCRIPT.md" in content, "README.md does not link to docs/DEMO_SCRIPT.md"

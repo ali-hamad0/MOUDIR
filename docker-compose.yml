@@ -95,8 +95,18 @@ services:
   #   later boots: just unseals using the saved key file.
   vault-init:
     image: hashicorp/vault:latest
+    # Run as root: the entrypoint writes the unseal-key file into the bind-mounted
+    # ./secrets, which Docker Desktop mounts root-owned — the default vault user
+    # (uid 100) gets "Permission denied" creating vault-init.txt.
+    user: "0:0"
     environment:
       VAULT_ADDR: http://vault:8200
+      SKIP_SETCAP: "true"   # we override the entrypoint; skip the image's mlock setcap step
+    cap_add:
+      # The vault CLI binary carries an IPC_LOCK file capability; without this
+      # cap the binary fails to exec ("Operation not permitted", rc 126), so the
+      # wait loop below never sees a real status and times out. Matches vault-seed.
+      - IPC_LOCK
     volumes:
       - ./secrets:/vault/secrets
     networks:
