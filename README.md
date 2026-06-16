@@ -1,12 +1,42 @@
-# Modir — AI Business Operations Assistant for Lebanese SMEs
+<div align="center">
+
+<img src="frontend/public/logo.jpg" alt="Modir logo" width="180" height="180" />
+
+# Modir · مودير
+
+### AI Business Operations Assistant for Lebanese SMEs
+
+Manage orders, inventory, finance, and customers over **WhatsApp** and a **web dashboard** — entirely in Lebanese Arabic.
 
 [![CI](https://github.com/ali-hamad0/MOUDIR/actions/workflows/ci.yml/badge.svg)](https://github.com/ali-hamad0/MOUDIR/actions/workflows/ci.yml)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-async-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React 18](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-agents-1C3C3C)](https://langchain-ai.github.io/langgraph/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+[Demo](#demo) · [Architecture](#architecture) · [Quick start](#quick-start) · [Docs](#documentation) · [For reviewers](#for-reviewers)
+
+</div>
+
+---
+
+## Overview
 
 Modir lets Lebanese small business owners manage orders, inventory, finance,
 and customers through WhatsApp and a web dashboard, in Lebanese Arabic.
 Five LangGraph AI agents handle different domains; customers place orders by
 typing naturally in WhatsApp. When AI is unavailable, the owner can enter
 orders manually — the business never stops.
+
+### Highlights
+
+- 🗣️ **Lebanese Arabic, end to end** — customers and owners both speak the dialect; the UI is RTL.
+- 🤖 **Five specialist agents** — Order, Inventory, Finance, Customer, and Advisor, routed by a LangGraph supervisor.
+- 🧱 **The Wall** — strict multi-tenant isolation enforced in code on every row and every query.
+- 🧠 **ML predicts, LLMs explain** — trained models forecast demand and flag churn; agents put it in words.
+- 🧾 **Paper to data** — OCR turns photographed supplier bills into structured inventory and finance entries.
+- 🛟 **Always-on** — if AI providers fail, manual order entry keeps the shop running.
 
 ## Demo
 
@@ -66,6 +96,17 @@ flowchart TD
     LOKI --> GRAFANA
     WH --> LOKI
 ```
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Backend** | Python 3.11 · FastAPI · SQLAlchemy 2.x (async) · Alembic · structlog |
+| **AI / Agents** | LangGraph · Gemini Flash (Tier 1) · Gemini Pro (Tier 2) · LangSmith tracing |
+| **Data** | Postgres 16 + pgvector · Redis 7 · MinIO |
+| **Secrets** | HashiCorp Vault |
+| **Frontend** | React 18 · Vite · Tailwind (RTL) |
+| **Ops** | Docker Compose · Grafana + Loki · GitHub Actions CI |
 
 ## Prerequisites
 
@@ -161,3 +202,17 @@ across 10 tenants and asserts zero cross-tenant data leakage.
 | ML predicts, LLM explains | `backend/app/ml/` (models) vs `backend/app/agents/` (language) |
 | No `os.getenv`, `print(`, `import requests` in app code | `grep -rn "os.getenv\|print(\|import requests" backend/app/` |
 | Red-team block rate >= 92% | `backend/app/agents/eval/agent_thresholds.yaml` + CI step |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, commit format, and the
+code standards in [`.specify/memory/constitution.md`](.specify/memory/constitution.md).
+Security policy: [SECURITY.md](SECURITY.md).
+
+## License
+
+Released under the [MIT License](LICENSE) © 2026 Ali Hamad.
+
+<div align="center">
+<sub>Built for Lebanese small businesses — صُنع لأصحاب المحلات في لبنان 🇱🇧</sub>
+</div>
