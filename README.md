@@ -50,9 +50,6 @@ cd frontend && npm install && npm run dev   # http://localhost:5173
 
 Login: `demo@modir.test` / `DemoPassword1`
 
-Full 5-minute walkthrough (customer order → ML forecast → AI down → manual entry → Grafana):
-[docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)
-
 ## Architecture
 
 ```mermaid
@@ -188,8 +185,6 @@ across 10 tenants and asserts zero cross-tenant data leakage.
 
 ## For Reviewers
 
-- [docs/FOR_REVIEWERS.md](docs/FOR_REVIEWERS.md) — every defend-it question answered with code references
-- [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) — step-by-step demo guide with exact cURL commands
 - Seed demo data: `docker compose exec api python -m scripts.seed_demo`
 
 **Key architectural claims to verify:**
